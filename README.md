@@ -1,6 +1,6 @@
 # Boston Golang · October 26, 2026
 
-A seven-slide Watermill talk by Matt Spurlin, Senior Software Engineer at Datadog. React + the official reveal.js React integration renders the slides; Go/Fiber runs real background report workers.
+A eight-slide Watermill talk by Matt Spurlin, Senior Software Engineer at Datadog. React + the official reveal.js React integration renders the slides; Go/Fiber runs real background report workers.
 
 ## Run the talk
 
@@ -11,7 +11,7 @@ Requirements: Node.js 24.15+ (24.x recommended) or 26+, npm 10+, Go 1.26+. Go ra
 ./scripts/run.sh
 ```
 
-Open http://127.0.0.1:5173. Both applications must be running for the four live slides. The first three introduction slides work offline. Arrow keys/swipe navigate, Escape toggles overview, S opens speaker notes. Ctrl-C stops both servers. Run from any working directory; scripts locate the repository themselves.
+Open http://127.0.0.1:5173. Both applications must be running for the five live slides. The first three introduction slides work offline. Arrow keys/swipe navigate, Escape toggles overview, S opens speaker notes. Ctrl-C stops both servers. Run from any working directory; scripts locate the repository themselves.
 
 Development:
 
@@ -24,26 +24,27 @@ React hot-reloads. Restart after Go changes. Optional root `.env` (see `.env.exa
 
 ## The story: generate a report
 
-The title, speaker bio, and Watermill introduction lead into four deliberately small demonstrations:
+The title, speaker bio, and Watermill introduction lead into five deliberately small demonstrations:
 
 1. **Move work out of the request.** A real Watermill GoChannel publication delivers one request to a subscriber. The request is handled in the background and explicitly acknowledged. The UI shows Queued → Processing → Ready and a small synthetic CSV.
-2. **Give the worker a handler.** A real Watermill Router invokes the same report function. It owns acknowledgement: successful return means Ack; an error means failure/Nack unless middleware handles it. This slide runs the successful path; the next exercises errors.
-3. **Retry a temporary failure.** The handler fails twice and succeeds on its third invocation. Watermill's actual Retry middleware performs the retries with bounded fixed delays. The message ID stays the same. There is no frontend retry simulation.
-4. **Keep work while the worker is offline.** The official Watermill SQLite adapter publishes to a file with no subscriber. The publisher and every database connection are closed. A new connection pool and Router subscriber open the same file, consuming the original request without publishing again.
+2. **Build the subscriber.** Subscribe before publishing, read the returned message channel, process the message, then call Ack on success or Nack on failure. The real code also handles context cancellation and a closed channel. This is a finite one-message teaching worker; a production worker would keep reading.
+3. **Give the worker a handler.** A real Watermill Router invokes the same report function. It owns acknowledgement: successful return means Ack; an error means failure/Nack unless middleware handles it. This slide runs the successful path; the next exercises errors.
+4. **Retry a temporary failure.** The handler fails twice and succeeds on its third invocation. Watermill's actual Retry middleware performs the retries with bounded fixed delays. The message ID stays the same. There is no frontend retry simulation.
+5. **Keep work while the worker is offline.** The official Watermill SQLite adapter publishes to a file with no subscriber. The publisher and every database connection are closed. A new connection pool and Router subscriber open the same file, consuming the original request without publishing again.
 
-Every demo starts automatically when its slide becomes active. It runs once, not continuously; Replay starts a fresh isolated run. Polling only displays server observations. Leaving the slide, opening overview, or unmounting aborts polling and requests backend cancellation. Errors stop the scenario rather than silently restarting it.
+Every demo starts automatically when its slide becomes active and repeats while that slide stays active. A large stage visual explains the current action; details, message IDs and the event log are secondary. After Ready, the finished result stays visible during a four-second countdown. The next cycle starts only after successful backend cleanup. A shared client-side start gate serializes canceled requests and late responses across navigation, overview and React remounts. Leaving the slide, opening overview, or unmounting stops polling/countdowns and cancels work. API or cleanup errors stop automatic cycling rather than creating a retry storm; server expiry remains a fallback for disconnected browsers. If creation has an unknown outcome and no usable run ID, the deck blocks further starts and asks you to wait 90 seconds before reloading. If an ID is known but cleanup fails, Try again retries cleanup before allowing a new run.
 
 ### What the durability demo proves (and does not)
 
 It proves real file-backed Watermill messages survive closing all database connections and can be consumed by a newly started worker/subscriber. It does **not** kill/restart the operating-system process, demonstrate recovery from a machine crash, or preserve the UI status registry across API restart. The queued message lives in SQLite, not in a custom imitation queue. The SQLite adapter is officially listed as **beta**.
 
-The first three demos use GoChannel: in-process memory, no crash durability. The final run uses a separate temporary SQLite file. Each run deletes its temporary database only after its resources close. This is intentionally a finite teaching lifecycle, not a persistent production report service.
+The first four demos use GoChannel: in-process memory, no crash durability. The final run uses a separate temporary SQLite file. Each run deletes its temporary database only after its resources close. This is intentionally a finite teaching lifecycle, not a persistent production report service.
 
-All four report outputs use deterministic synthetic rows. Replacing a run's CSV avoids accumulating a second artifact during retries, but is **not** a transactional idempotency mechanism or an exactly-once guarantee. Production side effects need durable idempotency keys, transaction/outbox design where appropriate, and explicit transport delivery semantics.
+All five report outputs use deterministic synthetic rows. Replacing a run's CSV avoids accumulating a second artifact during retries, but is **not** a transactional idempotency mechanism or an exactly-once guarantee. Production side effects need durable idempotency keys, transaction/outbox design where appropriate, and explicit transport delivery semantics.
 
 ## Implementation map
 
-- `apps/web/src/App.tsx`: seven-slide deck, notes, source excerpts.
+- `apps/web/src/App.tsx`: eight-slide deck, notes, source excerpts.
 - `apps/web/src/`: report UI, polling and reveal lifecycle tests.
 - `apps/api/internal/server/reports.go`: Watermill publication, Router, Retry, SQLite lifecycle, cancellation and routes. The snippets on slides are extracted from this actual source using `demo:*` markers.
 - `apps/api/internal/server/reports_test.go`: real API/worker integration tests, retries, lifecycle and persistent queue behavior.
@@ -55,14 +56,14 @@ The previous chat/SSE presentation remains in git history at `e911138`; it is no
 ## API and resource bounds
 
 ```text
-POST   /api/reports/runs       {"mode":"publish"|"router"|"retry"|"durable"}
+POST   /api/reports/runs       {"mode":"publish"|"subscribe"|"router"|"retry"|"durable"}
 GET    /api/reports/runs/:id
 DELETE /api/reports/runs/:id
 GET    /api/health
 GET    /api/message
 ```
 
-POST returns 202 with a run ID, Watermill message ID, status, attempt count and real event timeline. GET returns the current snapshot and CSV when ready. DELETE is idempotent and cancels pending work; deleted/expired reads return 404. Invalid modes or malformed JSON return 400. At most 16 retained runs exist concurrently (503 when full). Each worker is limited to 20 seconds; snapshots expire after 90 seconds, including abandoned requests whose browsers never received a run ID. Each run has its own transport and subscriber. API shutdown cancels active work.
+POST returns 202 with a run ID, Watermill message ID, status, attempt count and real event timeline. GET returns the current snapshot and CSV when ready. DELETE is idempotent, cancels pending work, and waits for its worker to stop before returning; deleted/expired reads return 404. Invalid modes or malformed JSON return 400. At most 16 retained runs exist concurrently (503 when full). Each worker is limited to 20 seconds; snapshots expire after 90 seconds, including abandoned requests whose browsers never received a run ID. Each run has its own transport and subscriber. API shutdown cancels active work.
 
 Only expose this unauthenticated demo on your own machine. Do not bind it publicly without authentication, rate limiting and an explicit operational design. Health is liveness only, not a SQLite dependency probe.
 
@@ -76,7 +77,7 @@ npm run test:api
 
 From `apps/api`, `go test -race ./...` runs backend checks. Use `gofmt -w apps/api` after Go edits. Dependency versions are pinned in npm's lockfile and Go module sums.
 
-Manual rehearsal: visit all four live slides, verify the stable message ID, three retry attempts, queued/offline SQLite stage and Ready CSV. Leave during Processing, return, toggle overview, Replay, and stop the API to verify the visible error state. The flow should never invent successful progress if the API fails.
+Manual rehearsal: visit all five live slides, verify the stable message ID, three retry attempts, queued/offline SQLite stage and Ready CSV. Leave during Processing, return, toggle overview, observe multiple countdown/replay cycles, and stop the API to verify the visible error state. The flow should never invent successful progress if the API fails.
 
 ## Official references
 

@@ -36,7 +36,7 @@ func awaitReport(t *testing.T, r *reportRun) reportView {
 }
 
 func TestReportsAllModesAndRealCSV(t *testing.T) {
-	for _, mode := range []string{"publish", "router", "retry", "durable"} {
+	for _, mode := range []string{"publish", "subscribe", "router", "retry", "durable"} {
 		t.Run(mode, func(t *testing.T) {
 			h := testReportHub(t)
 			r, err := h.start(mode)
@@ -73,10 +73,10 @@ func TestReportsAllModesAndRealCSV(t *testing.T) {
 			if counts["published"] != 1 || counts["ready"] != 1 || counts["attempt"] != wantAttempts {
 				t.Fatalf("wrong event counts: %v", counts)
 			}
-			if mode == "publish" && counts["ack"] != 1 {
+			if (mode == "publish" || mode == "subscribe") && counts["ack"] != 1 {
 				t.Fatal("direct subscriber did not acknowledge")
 			}
-			if mode != "publish" && counts["worker-online"] != 1 {
+			if mode != "publish" && mode != "subscribe" && counts["worker-online"] != 1 {
 				t.Fatal("router never became ready")
 			}
 			if mode == "retry" && counts["retry"] != 2 {
@@ -206,11 +206,18 @@ func TestReportsExpiryAndIsolation(t *testing.T) {
 			t.Fatalf("expiry did not cancel: %+v", v)
 		}
 	}
-	h.mu.Lock()
-	n := len(h.runs)
-	h.mu.Unlock()
-	if n != 0 {
-		t.Fatalf("expired runs retained: %d", n)
+	deadline := time.Now().Add(time.Second)
+	for {
+		h.mu.Lock()
+		n := len(h.runs)
+		h.mu.Unlock()
+		if n == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expired runs retained: %d", n)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 
@@ -257,7 +264,7 @@ func TestReportRoutes(t *testing.T) {
 }
 
 func TestReportsImmediateCancellationAllModes(t *testing.T) {
-	for _, mode := range []string{"publish", "router", "retry", "durable"} {
+	for _, mode := range []string{"publish", "subscribe", "router", "retry", "durable"} {
 		t.Run(mode, func(t *testing.T) {
 			h := testReportHub(t)
 			h.delay = time.Second
@@ -309,6 +316,93 @@ func TestReportsRouterCancellationDuringStartup(t *testing.T) {
 		}
 		if err := bus.Close(); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+func TestReportsSustainedReplayReleasesCapacity(t *testing.T) {
+	h := testReportHub(t)
+	h.delay = time.Millisecond
+	previousIDs := map[string]bool{}
+	modes := []string{"publish", "subscribe", "router", "retry", "durable"}
+	for i := 0; i < maxReportRuns*3; i++ {
+		r, err := h.start(modes[i%len(modes)])
+		if err != nil {
+			t.Fatalf("cycle %d could not start: %v", i, err)
+		}
+		v := awaitReport(t, r)
+		if v.Status != "Ready" {
+			t.Fatalf("cycle %d failed: %+v", i, v)
+		}
+		if previousIDs[v.ID] || previousIDs[v.MessageID] {
+			t.Fatal("replay reused a run or message ID")
+		}
+		previousIDs[v.ID] = true
+		previousIDs[v.MessageID] = true
+		h.remove(v.ID)
+		h.mu.Lock()
+		active := len(h.runs)
+		h.mu.Unlock()
+		if active != 0 {
+			t.Fatalf("cycle %d left %d retained runs", i, active)
+		}
+	}
+}
+
+func TestReportConcurrentDeletesWaitForCleanup(t *testing.T) {
+	h := testReportHub(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &reportRun{view: reportView{ID: "slow-cleanup"}, ctx: ctx, cancel: cancel, done: make(chan struct{}), expiry: time.NewTimer(time.Hour)}
+	h.runs[r.view.ID] = r
+	returned := make(chan struct{}, 2)
+	for i := 0; i < 2; i++ {
+		go func() { h.remove(r.view.ID); returned <- struct{}{} }()
+	}
+	<-ctx.Done()
+	select {
+	case <-returned:
+		t.Fatal("DELETE returned before worker cleanup finished")
+	case <-time.After(20 * time.Millisecond):
+	}
+	h.mu.Lock()
+	retained := h.runs[r.view.ID] == r
+	h.mu.Unlock()
+	if !retained {
+		t.Fatal("run removed before cleanup finished; repeated DELETE could acknowledge too soon")
+	}
+	close(r.done)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-returned:
+		case <-time.After(time.Second):
+			t.Fatal("DELETE did not finish after cleanup")
+		}
+	}
+	h.mu.Lock()
+	count := len(h.runs)
+	h.mu.Unlock()
+	if count != 0 {
+		t.Fatal("cleaned run retained")
+	}
+}
+
+func TestReportSubscriberClosedAndCancelled(t *testing.T) {
+	for _, closed := range []bool{false, true} {
+		ctx, cancel := context.WithCancel(context.Background())
+		r := &reportRun{view: reportView{Mode: "subscribe", MessageID: "subscriber-cancel"}, ctx: ctx, cancel: cancel, delay: time.Millisecond}
+		bus := gochannel.NewGoChannel(gochannel.Config{OutputChannelBuffer: 1}, watermill.NopLogger{})
+		if closed {
+			_ = bus.Close()
+		} else {
+			cancel()
+		}
+		if err := r.subscribed(bus); err == nil {
+			t.Fatal("closed/canceled subscriber unexpectedly succeeded")
+		}
+		cancel()
+		_ = bus.Close()
+		if r.snapshot().CSV != "" {
+			t.Fatal("closed/canceled subscriber generated output")
 		}
 	}
 }

@@ -197,6 +197,11 @@ func (r *reportRun) durable() error {
 		return err
 	}
 	r.event("worker-offline", "No subscriber exists. Publish into file-backed SQLite.")
+	if err = r.pause(); err != nil {
+		_ = pub.Close()
+		_ = db.Close()
+		return err
+	}
 	if err = r.publish(pub); err != nil {
 		_ = pub.Close()
 		_ = db.Close()
@@ -232,6 +237,35 @@ func (r *reportRun) durable() error {
 	r.event("db-reopened", "New SQLite connections opened. Start a new Router worker; do not republish.")
 	return r.routed(sub, nil)
 }
+
+// subscribed demonstrates one finite message; a long-lived worker would keep reading.
+func (r *reportRun) subscribed(bus *gochannel.GoChannel) error {
+	// demo:subscribe:start
+	incoming, err := bus.Subscribe(r.ctx, reportTopic)
+	if err != nil {
+		return err
+	}
+	// Subscribe first: this GoChannel transport does not retain missed messages.
+	if err := r.publish(bus); err != nil {
+		return err
+	}
+	select {
+	case <-r.ctx.Done():
+		return r.ctx.Err()
+	case msg, ok := <-incoming:
+		if !ok {
+			return errors.New("subscriber closed")
+		}
+		if err := r.process(msg); err != nil {
+			msg.Nack()
+			return err
+		}
+		msg.Ack()
+		r.event("ack", "Subscriber acknowledged successful work")
+		return nil
+	}
+	// demo:subscribe:end
+}
 func (r *reportRun) execute() {
 	defer close(r.done)
 	defer r.cancel()
@@ -245,30 +279,8 @@ func (r *reportRun) execute() {
 	} else {
 		bus := gochannel.NewGoChannel(gochannel.Config{OutputChannelBuffer: 1}, watermill.NopLogger{})
 		defer bus.Close()
-		if r.view.Mode == "publish" {
-			var incoming <-chan *message.Message
-			incoming, err = bus.Subscribe(r.ctx, reportTopic)
-			if err == nil {
-				err = r.publish(bus)
-			}
-			if err == nil {
-				select {
-				case msg, ok := <-incoming:
-					if !ok {
-						err = errors.New("subscriber closed")
-						break
-					}
-					err = r.process(msg)
-					if err == nil {
-						msg.Ack()
-						r.event("ack", "Subscriber acknowledged successful work")
-					} else {
-						msg.Nack()
-					}
-				case <-r.ctx.Done():
-					err = r.ctx.Err()
-				}
-			}
+		if r.view.Mode == "publish" || r.view.Mode == "subscribe" {
+			err = r.subscribed(bus)
 		} else {
 			err = r.routed(bus, func() error { return r.publish(bus) })
 		}
@@ -298,7 +310,7 @@ func newReportHub() *reportHub {
 	return &reportHub{runs: make(map[string]*reportRun), delay: 1200 * time.Millisecond, ttl: 90 * time.Second}
 }
 func (h *reportHub) start(mode string) (*reportRun, error) {
-	if mode != "publish" && mode != "router" && mode != "retry" && mode != "durable" {
+	if mode != "publish" && mode != "subscribe" && mode != "router" && mode != "retry" && mode != "durable" {
 		return nil, fiber.NewError(400, "Unknown report demo mode")
 	}
 	h.mu.Lock()
@@ -320,12 +332,16 @@ func (h *reportHub) start(mode string) (*reportRun, error) {
 func (h *reportHub) remove(id string) {
 	h.mu.Lock()
 	r := h.runs[id]
-	delete(h.runs, id)
 	h.mu.Unlock()
 	if r != nil {
 		r.expiry.Stop()
 		r.cancel()
 		<-r.done
+		h.mu.Lock()
+		if h.runs[id] == r {
+			delete(h.runs, id)
+		}
+		h.mu.Unlock()
 	}
 }
 func (h *reportHub) close() {
