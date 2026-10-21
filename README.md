@@ -1,6 +1,6 @@
 # Boston Golang · October 26, 2026
 
-A talk on Watermill. This monorepo starts with a TypeScript/React frontend and a Go/Fiber JSON API. Watermill itself is not wired in yet; the working request/response path is the foundation for the talk.
+A talk on Watermill. This monorepo contains a three-slide React presentation and a Go/Fiber JSON API. The presentation introduces the library; Watermill itself is not wired into the API yet.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ npm ci
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. The React page fetches `/api/message` through Vite's proxy to the API at http://127.0.0.1:3000. The page shows loading, success, and recoverable error states. No CORS configuration is needed for this same-origin development flow.
+Open http://127.0.0.1:5173 for the presentation. The deck is self-contained and does not need the API; `npm run dev:web` is sufficient for presenting. The original JSON API remains at http://127.0.0.1:3000, with Vite proxying `/api/*` during development. No CORS configuration is needed for this same-origin development flow.
 
 React changes hot-reload. The API is compiled on startup; restart `npm run dev` after Go changes. Ctrl-C stops both servers. Either server failing also stops the other. Both bind to loopback by default.
 
@@ -54,7 +54,7 @@ apps/
     internal/server/     # Fiber application, routes, HTTP tests
     go.mod / go.sum
   web/
-    src/                 # React UI, typed API client, component/client tests
+    src/                 # React slides, theme, typed API client, tests
     vite.config.ts       # Local /api proxy
 scripts/api.mjs          # Cross-platform Go build/test/lint/dev commands
 .env.example
@@ -86,3 +86,30 @@ No database, auth system, container platform, or deployment provider is assumed.
 - [Vite guide](https://vite.dev/guide/)
 - [Fiber v3 documentation](https://docs.gofiber.io/)
 - [Go downloads](https://go.dev/dl/)
+
+## Presenting
+
+The three opening slides are:
+
+1. **Watermill**: message-driven applications, the Go way.
+2. **Who I am**: Matt Spurlin, Senior Software Engineer at Datadog, [mattsp1290](https://github.com/mattsp1290).
+3. **What is Watermill?**: publishing/subscribing, routing to handlers, middleware, and transport choices.
+
+Use the arrow keys, Space, on-screen arrows, or horizontal touch swipes to navigate. The progress bar and slide counter show your place. URLs include stable slide hashes (`#/title`, `#/speaker`, `#/watermill`) so slides can be linked directly. Press **S** for the native speaker view with per-slide notes, **Esc** for the overview, and **F** for fullscreen. A browser popup permission may be needed for speaker view. On narrow screens, content reflows and longer slides can scroll vertically. Reduced-motion preferences disable slide transitions.
+
+Edit slide content and speaker notes in `apps/web/src/App.tsx`; the presentation theme is `apps/web/src/App.css`. The speaker details were supplied by the presenter. This is not a statement of Datadog endorsement. This is a web presentation, not a generated PowerPoint `.pptx` file.
+
+### Library choice and sources
+
+We use the official **@revealjs/react 0.2.2** wrapper with **reveal.js 6.0.2**, pinned exactly in the web package and lockfile. It supports the existing React 19 app, React-authored slides, lifecycle cleanup, keyboard/touch navigation, progress, speaker notes, and presenter view without building those features ourselves. The wrapper is a newer 0.x package, so versions are pinned and real deck initialization/navigation/StrictMode cleanup are tested. Spectacle was considered, but its then-current react-spring dependency advertised React peer ranges that did not include this app's React 19 version.
+
+Official references checked for this implementation:
+
+- [React integration and lifecycle](https://revealjs.com/react/)
+- [Reveal speaker view](https://revealjs.com/speaker-view/)
+- [Reveal configuration](https://revealjs.com/config/)
+- [Watermill introduction](https://watermill.io/learn/getting-started/)
+- [Publisher/subscriber semantics](https://watermill.io/docs/pub-sub/)
+- [Watermill router](https://watermill.io/docs/messages-router/)
+
+Watermill offers common interfaces across transports, not identical delivery guarantees. Speaker notes call out redelivery and idempotent handlers; the deck does not promise exactly-once processing.
