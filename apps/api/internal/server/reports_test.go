@@ -35,7 +35,7 @@ func awaitReport(t *testing.T, r *reportRun) reportView {
 	return r.snapshot()
 }
 
-func TestReportsAllModesAndRealCSV(t *testing.T) {
+func TestReportsPublicationAndGenerationModes(t *testing.T) {
 	for _, mode := range []string{"publish", "subscribe", "router", "retry", "durable"} {
 		t.Run(mode, func(t *testing.T) {
 			h := testReportHub(t)
@@ -44,19 +44,32 @@ func TestReportsAllModesAndRealCSV(t *testing.T) {
 				t.Fatal(err)
 			}
 			view := awaitReport(t, r)
-			if view.Status != "Ready" || view.Error != "" {
-				t.Fatalf("not ready: %+v", view)
+			wantStatus := "Ready"
+			if mode == "publish" {
+				wantStatus = "Published"
+			}
+			if view.Status != wantStatus || view.Error != "" {
+				t.Fatalf("status %s want %s: %+v", view.Status, wantStatus, view)
 			}
 			wantAttempts := 1
+			if mode == "publish" {
+				wantAttempts = 0
+			}
 			if mode == "retry" {
 				wantAttempts = 3
 			}
 			if view.Attempts != wantAttempts {
 				t.Fatalf("attempts %d want %d", view.Attempts, wantAttempts)
 			}
-			records, err := csv.NewReader(strings.NewReader(view.CSV)).ReadAll()
-			if err != nil || len(records) != 3 || records[0][0] != "team" || records[2][1] != "8" {
-				t.Fatalf("invalid generated CSV: %q, %v", view.CSV, err)
+			if mode == "publish" {
+				if view.CSV != "" {
+					t.Fatalf("publication unexpectedly generated CSV: %q", view.CSV)
+				}
+			} else {
+				records, err := csv.NewReader(strings.NewReader(view.CSV)).ReadAll()
+				if err != nil || len(records) != 3 || records[0][0] != "team" || records[2][1] != "8" {
+					t.Fatalf("invalid generated CSV: %q, %v", view.CSV, err)
+				}
 			}
 			counts := map[string]int{}
 			positions := map[string]int{}
@@ -70,10 +83,22 @@ func TestReportsAllModesAndRealCSV(t *testing.T) {
 					t.Fatalf("worker consumed wrong message: %+v", event)
 				}
 			}
-			if counts["published"] != 1 || counts["ready"] != 1 || counts["attempt"] != wantAttempts {
+			wantReady := 1
+			if mode == "publish" {
+				wantReady = 0
+			}
+			if counts["published"] != 1 || counts["ready"] != wantReady || counts["attempt"] != wantAttempts {
 				t.Fatalf("wrong event counts: %v", counts)
 			}
-			if (mode == "publish" || mode == "subscribe") && counts["ack"] != 1 {
+			if mode == "publish" {
+				if counts["available"] != 1 || counts["ack"] != 0 || counts["worker-online"] != 0 || counts["retry"] != 0 {
+					t.Fatalf("publish-only ran business logic or failed to prove availability: %v", counts)
+				}
+				if positions["available"] <= positions["published"] {
+					t.Fatalf("availability precedes publish: %+v", view.Events)
+				}
+			}
+			if mode == "subscribe" && counts["ack"] != 1 {
 				t.Fatal("direct subscriber did not acknowledge")
 			}
 			if mode != "publish" && mode != "subscribe" && counts["worker-online"] != 1 {
@@ -181,8 +206,8 @@ func TestReportsInvalidCapacityAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("capacity not recovered: %v", err)
 	}
-	if v := awaitReport(t, r); v.Status != "Ready" {
-		t.Fatalf("new run failed: %+v", v)
+	if v := awaitReport(t, r); v.Status != "Published" {
+		t.Fatalf("new publication run failed: %+v", v)
 	}
 }
 
@@ -331,7 +356,11 @@ func TestReportsSustainedReplayReleasesCapacity(t *testing.T) {
 			t.Fatalf("cycle %d could not start: %v", i, err)
 		}
 		v := awaitReport(t, r)
-		if v.Status != "Ready" {
+		wantStatus := "Ready"
+		if modes[i%len(modes)] == "publish" {
+			wantStatus = "Published"
+		}
+		if v.Status != wantStatus {
 			t.Fatalf("cycle %d failed: %+v", i, v)
 		}
 		if previousIDs[v.ID] || previousIDs[v.MessageID] {

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Deck, Slide } from '@revealjs/react'
 import type { DeckProps } from '@revealjs/react'
 import RevealNotes from 'reveal.js/plugin/notes'
@@ -24,6 +25,7 @@ function sourceExcerpt(name: string) {
       .replace(/\tif err := r\.process\(msg\); err != nil \{\n\t\tmsg\.Nack\(\)\n\t\treturn err\n\t\}/, '\tif err := r.process(msg); err != nil { msg.Nack(); return err }')
       .replace(/\n\tr\.event\("ack", [^\n]*\)/, ' // … demo event …')
   }
+  if (name === 'router') return source.replace(/\n\t\tselect \{[\s\S]*?\n\t\t\}/, '\n\t\t// … demo completion signal …')
   if (name !== 'durable') return source
   // Keep the real lifecycle calls, with omissions made explicit instead of showing
   // 30 lines of repeated error checks on a presentation slide.
@@ -34,53 +36,50 @@ function sourceExcerpt(name: string) {
     .replace(/if err != nil \{\n\treturn err\n\}/g, '// … error handling omitted …')
 }
 
-const reportStories: (ReportStory & { notes: string })[] = [
-  {
-    mode: 'publish', step: '03 / MOVE WORK OUT OF THE REQUEST',
-    title: 'Accept the request.', accent: 'Do the work later.',
-    explanation: 'A tiny CSV report is enough to see the boundary: HTTP accepts a job, then a subscriber generates the file.',
-    concept: 'Publish a message. Return control to the caller. Let a worker finish the report.',
-    boundary: 'GoChannel is in-memory. This first demo is not a durable job queue. The browser polls job state; Watermill carries the work.',
+type LessonMode = 'publish' | 'router' | 'retry' | 'durable'
+const liveNotes = 'Entering the active demo slide makes a real HTTP POST to the Go API. All visible state comes from the server. Hold the completed result for four seconds, then replay only while active. Navigation, overview, and unmount cancel work and the replay timer. Errors pause replay. Cleanup must be confirmed before another run starts. The source excerpt is taken from reports.go at build time. Browser polling observes the demo; it is not part of Watermill. '
+const reportStories: Record<LessonMode, ReportStory & { notes: string; footer: string }> = {
+  publish: {
+    mode: 'publish', step: '03 / PUBLISH · LIVE',
+    title: 'Publish one request.', accent: 'Stop at the boundary.',
+    explanation: 'Create a message and publish it to the reports topic. The demo confirms availability to a live subscription, then stops.',
+    concept: 'Published is not processed. No handler runs and no CSV is generated on this slide.',
+    boundary: 'A buffered GoChannel subscription is already listening, but no handler is attached. The demo cleans up the message after this run; it is not retained for a later slide.',
     source: sourceExcerpt('publish'),
-    notes: 'The first three opening slides are unchanged. This five-part story builds one small synthetic CSV report: publish, subscribe, route, retry, and preserve. Entering only the active slide makes an actual HTTP POST to the Go API. Watch the large state explanation and Queued become Processing, then Ready. Status, attempt count, message ID, and events are real server facts, not simulated progress. Each completed run holds its result for four seconds, then automatically replays while this slide stays active. Leaving, opening overview, and unmount cancel the current run and pending replay; overview never starts work. Errors stop automatic replay. Try again is available only for recoverable errors, and must confirm cleanup before starting fresh work. The source excerpt comes from reports.go at build time. This first slide focuses on publishing; the next shows the plain subscriber and explicit Ack/Nack. GoChannel is in-memory, not durable. A successful publish is not proof that the report has finished. Browser polling is only the observation path, not the lesson. Start both apps using npm run dev.',
+    notes: liveNotes + 'This is deliberately only a Publisher demonstration. Point to the message ID, payload, topic, and Publish call. Before publishing, the demo establishes a live buffered GoChannel subscription. The terminal Published state means Publish returned nil and availability in that buffered channel was observed. No application receive, handler, Ack, or CSV occurs. GoChannel is live-only; cleanup removes the subscription and message, and later demos create isolated runs. This does not prove offline retention or durable storage. Source: https://watermill.io/docs/pub-sub/.',
+    footer: 'PUBLISH: MESSAGE → TOPIC',
   },
-  {
-    mode: 'subscribe', step: '04 / RECEIVE THE MESSAGE',
-    title: 'Receive the message.', accent: 'Own the outcome.',
-    explanation: 'Subscribe(ctx, topic) gives a channel of messages. Receive one, do the work, then acknowledge the result.',
-    concept: 'Process successfully → call Ack(). Processing fails → call Nack(). The subscriber owns that decision.',
-    boundary: 'Handle context cancellation and a closed messages channel. Nack requests redelivery; the transport and configuration determine what happens next.',
-    source: sourceExcerpt('subscribe'),
-    notes: 'The second part of the five-part story makes the subscriber explicit. Subscribe(ctx, topic) returns a message channel and an error. Check the error, select on context cancellation and channel receive, and check the channel is still open before using the message. The generator does real work before calling Ack. A processing error calls Nack; this is a request for redelivery, not a promise that every transport behaves identically. This slide follows the successful path. The actual source includes both outcomes and safe shutdown. This deliberately finite example handles one message; a long-lived worker would keep receiving in a loop. Publisher and demonstration staging are explicitly folded in the excerpt. GoChannel remains in-memory. Read the large state explanation alongside the received and acknowledged server events. On completion, hold the real result for four seconds, then replay only while this slide is active. Navigation and overview stop the run and replay timer. Source: https://watermill.io/docs/pub-sub/.',
-  },
-  {
-    mode: 'router', step: '05 / HANDLE THE MESSAGE',
-    title: 'Give the work', accent: 'a handler.',
-    explanation: 'The Router wires a subscription to application code. Your handler reports success or failure.',
-    concept: 'Return nil → the Router acknowledges. Return an error → the Router negatively acknowledges.',
-    boundary: 'Ack means this handler succeeded, not “exactly once.” Transport and configuration determine redelivery. Keep real handlers idempotent.',
+  router: {
+    mode: 'router', step: '04 / HANDLE · LIVE',
+    title: 'Call the handler.', accent: 'Build the report.',
+    explanation: 'The Subscriber delivers the message. The Router invokes the application handler, which generates a tiny CSV.',
+    concept: 'Return nil → the Router calls Ack(). Return an error → the Router calls Nack().',
+    boundary: 'Ack means this handler succeeded, not exactly once. Redelivery depends on the transport. Make handlers idempotent.',
     source: sourceExcerpt('router'),
-    notes: 'Same report, now a Watermill Router handler. Read the small handler and explain the nil/error contract: returning nil acknowledges; returning an error negatively acknowledges. This automatic run follows the successful path and replays after a four-second result hold only while active. Navigation and overview cancel it. The next slide deliberately injects errors. Router wiring removes manual Ack/Nack from application code. Delivery semantics remain transport-dependent, so production handlers need idempotency. Source: https://watermill.io/docs/messages-router/.',
+    notes: liveNotes + 'The Subscriber is the transport adapter, not the function that makes the report. The Router connects the Subscriber to the handler, invokes it, and handles the acknowledgement outcome. This no-output handler returns only an error: nil means success, error means failure. AddConsumerHandler means the handler does not publish output messages; it can still produce an application result such as the CSV. This run takes the successful path. The demonstration completion signal is explicitly folded so the handler contract stays in focus. Source: https://watermill.io/docs/messages-router/.',
+    footer: 'HANDLE: DELIVERY → APPLICATION FUNCTION',
   },
-  {
-    mode: 'retry', step: '06 / RETRY A TRANSIENT FAILURE',
+  retry: {
+    mode: 'retry', step: '05 / MIDDLEWARE · LIVE',
     title: 'Fail twice.', accent: 'Finish on attempt three.',
-    explanation: 'A deliberately flaky generator makes Retry visible. One published message, three calls to the same handler.',
-    concept: 'Retry wraps the handler. Two temporary errors, short backoffs, then a successful CSV.',
-    boundary: 'These are middleware attempts, not three publications or proof of broker redelivery. Exhausted retries return an error to the Router.',
+    explanation: 'Retry middleware calls the same handler again after an error. This generator deliberately fails its first two attempts.',
+    concept: 'MaxRetries: 2 means one initial call plus two retries. The message ID stays the same.',
+    boundary: 'These are middleware attempts, not three publications or transport redeliveries. Exhausted retries return an error to the Router.',
     source: sourceExcerpt('retry'),
-    notes: 'No typing is needed. The actual generator fails on attempts one and two, then succeeds on attempt three. Point to the large state explanation, stable message ID, and real server event timeline. The completed result holds for four seconds before another run while this slide stays active; leaving or opening overview stops the loop. Watermill Retry middleware re-invokes the handler within this delivery; do not describe it as publishing three messages or three transport redeliveries. MaxRetries two means three total handler calls. Retry backoff is finite. If every retry fails, the resulting error goes to the Router, whose Nack behavior depends on the transport. Source: https://watermill.io/docs/middlewares/.',
+    notes: liveNotes + 'Focus only on the Retry wrapper and the handler attempts. MaxRetries two permits three total handler calls. The first two calls return a temporary error, Retry waits, then calls the handler again. The third succeeds and produces the CSV. Middleware returns that final outcome to the Router. Retry does not create three messages, and these attempts are not broker redeliveries. Source: https://watermill.io/docs/middlewares/.',
+    footer: 'MIDDLEWARE: WRAP THE SAME HANDLER',
   },
-  {
-    mode: 'durable', step: '07 / KEEP WORK WHILE THE WORKER IS OFFLINE',
-    title: 'Worker offline.', accent: 'Message preserved.',
-    explanation: 'Publish to a real SQLite file with no worker. Close the database, reopen it, then start a subscriber.',
-    concept: 'Watch Queued survive closing every connection. Start the first worker, then generate the CSV.',
-    boundary: 'Official Watermill SQLite transport (beta). Messages survive closing and reopening database connections before a worker starts. Not a process-crash or exactly-once guarantee.',
+  durable: {
+    mode: 'durable', step: '06 / ADVANCED: PERSISTENCE · LIVE',
+    title: 'Close every connection.', accent: 'Keep the message.',
+    explanation: 'Publish to a SQLite file before a Subscriber exists. Close every connection, reopen the same file, then start delivery.',
+    concept: 'The message stays on disk. After reopening, the Router invokes the handler without publishing again.',
+    boundary: 'Official Watermill SQLite transport (beta). This tests a connection restart, not a process crash or an exactly-once guarantee.',
     source: sourceExcerpt('durable'),
-    notes: 'This is an actual disk-backed SQLite demonstration, not a slice retained in Go memory. The server publishes with the worker offline, closes the publisher and database connection, waits briefly, opens the same database file, and starts a new worker. The run stays Queued until that subscriber processes the message. The official Watermill SQLite transport is beta. This controlled connection restart before the first subscriber starts is not a process crash, power-loss test, or exactly-once claim. Job status is demo memory, while the queued message is in SQLite. Each run is isolated, finite, and deleted on cleanup, with server expiry as a fallback. The completed result holds for four seconds before an automatic replay on the active slide only. Navigation and overview cancel work and the pending replay. In production choose a transport based on explicit persistence, delivery, throughput, and operations requirements.',
+    notes: liveNotes + 'Advanced extension after Publish, Handle, and Middleware. The queued message is stored in a real SQLite file. No Subscriber exists when publishing. The publisher and every database connection close, then the server opens a new connection pool to the same file and creates the Subscriber. The Go application process remains alive throughout: this is not a process crash or a power-loss test. If you use the word worker aloud, define it as the application process running a Subscriber, Router, and handler, not as another name for one of those components. Job status lives in demo memory; the message lives on disk. Every run is isolated and deleted on cleanup. SQLite support is beta. Source: https://watermill.io/pubsubs/sqlite/.',
+    footer: 'ADVANCED: TRANSPORT DEFINES PERSISTENCE',
   },
-]
+}
 
 const config: DeckProps['config'] = {
   width: '100%', height: '100%', margin: 0, disableLayout: true,
@@ -95,10 +94,41 @@ function SlideHeader({ section }: { section: string }) {
   return <div className="slide-header"><span>BOSTON GOLANG</span><span>{section}</span></div>
 }
 
+function LessonSlide({ id, section, title, accent, description, notes, source, children }: {
+  id: string; section: string; title: string; accent: string; description: string
+  notes: string; source: string; children: ReactNode
+}) {
+  return <Slide id={id} notes={notes}>
+    <div className="slide-content lesson-slide">
+      <SlideHeader section={section} />
+      <div className="lesson-body">
+        <div className="lesson-heading"><p className="eyebrow">UNDERSTAND IT FIRST</p><h2>{title} <span className="accent">{accent}</span></h2><p className="lesson-description">{description}</p></div>
+        {children}
+      </div>
+      <div className="slide-footer"><a href={source} target="_blank" rel="noreferrer">WATERMILL DOCS ↗</a><span>ONE IDEA. THEN ONE LIVE EXAMPLE.</span></div>
+    </div>
+  </Slide>
+}
+
+function LiveSlide({ mode }: { mode: LessonMode }) {
+  const story = reportStories[mode]
+  return <Slide id={`report-${mode}`} notes={story.notes}>
+    <div className="slide-content report-slide"><SlideHeader section={story.step} /><ReportSlide story={story} /><div className="slide-footer"><span>SOURCE: apps/api/internal/server/reports.go</span><span>{story.footer}</span></div></div>
+  </Slide>
+}
+
+function LessonNode({ label, title, detail }: { label: string; title: string; detail: string }) {
+  return <div className="lesson-node"><span className="lesson-label">{label}</span><strong>{title}</strong><p>{detail}</p></div>
+}
+
+function LessonArrow({ text }: { text: string }) {
+  return <div className="lesson-arrow"><span>{text}</span><b aria-hidden="true">→</b></div>
+}
+
 export default function App() {
   return (
     <Deck config={config} plugins={plugins} className="watermill-deck">
-      <Slide id="title" notes="Welcome to Boston Golang. This is a short introduction to Watermill, a Go library for building message-driven applications. The opening deck has three slides; live examples can come later.">
+      <Slide id="title" notes="Welcome to Boston Golang. This is a short introduction to Watermill, a Go library for building message-driven applications. Follow the Watermill learning order: Publish, Handle, Middleware. Explain each idea before its live example, then add SQLite persistence as an advanced extension.">
         <div className="slide-content title-slide">
           <SlideHeader section="OCTOBER 26, 2026" />
           <div className="title-body">
@@ -120,23 +150,66 @@ export default function App() {
           <div className="slide-footer"><span>WATERMILL / AN INTRODUCTION</span><span>GO, ONE MESSAGE AT A TIME.</span></div>
         </div>
       </Slide>
-      <Slide id="watermill" notes="Watermill is a library, not a message broker. Publisher and Subscriber interfaces provide a shared API across transports, while the Router coordinates handlers and middleware. Kafka, RabbitMQ, and PostgreSQL are examples of supported implementations. Delivery semantics depend on the transport and configuration: plan for redelivery and make handlers idempotent. Do not assume exactly-once processing or identical broker semantics. Source: https://watermill.io/learn/getting-started/ and https://watermill.io/docs/pub-sub/.">
+      <Slide id="watermill" notes="Watermill is a Go library, not a broker. Follow its getting-started progression: Publish, Handle, Middleware. Introduce the message first, then the function that processes it, then a wrapper around that function. Each idea gets an explanation before a live example. A short Subscriber bridge separates transport delivery from application handling. After the core path, SQLite persistence is an advanced extension. Publisher and Subscriber APIs are shared across transports, but persistence and delivery semantics depend on implementation and configuration. Make handlers idempotent. Source: https://watermill.io/learn/getting-started/.">
         <div className="slide-content intro-slide">
-          <SlideHeader section="02 / THE IDEA" />
-          <div className="intro-body"><p className="eyebrow">WHAT IS WATERMILL?</p><h2>Go services.<br /><span className="accent">Connected by messages.</span></h2><p className="intro-description">A Go library for message-driven and event-driven applications. Not another broker.</p>
+          <SlideHeader section="02 / THE LEARNING PATH" />
+          <div className="intro-body"><p className="eyebrow">WHAT IS WATERMILL?</p><h2>Go services.<br /><span className="accent">Connected by messages.</span></h2><p className="intro-description">A Go library, not a broker. Learn one piece at a time.</p>
             <ol className="concepts">
-              <li><span className="concept-number">01</span><h3>Publish & subscribe</h3><p>Send and receive messages through a common interface.</p></li>
-              <li><span className="concept-number">02</span><h3>Route to handlers</h3><p>Connect incoming messages to your application logic.</p></li>
-              <li><span className="concept-number">03</span><h3>Compose middleware</h3><p>Add concerns like retries and logging around handlers.</p></li>
+              <li><span className="concept-number">01</span><h3>Publish</h3><p>Put a message on a topic.</p></li>
+              <li><span className="concept-number">02</span><h3>Handle</h3><p>Run application code for a delivered message.</p></li>
+              <li><span className="concept-number">03</span><h3>Middleware</h3><p>Wrap the handler with reusable behavior.</p></li>
             </ol>
-            <div className="transport-line"><span>CHOOSE YOUR TRANSPORT</span><p>Kafka <b>·</b> RabbitMQ <b>·</b> PostgreSQL <b>·</b> and more</p></div>
+            <div className="transport-line"><span>OUR RHYTHM</span><p>Explain the idea <b>→</b> watch it run <b>·</b> then add persistence</p></div>
           </div>
-          <div className="slide-footer"><a href="https://watermill.io/learn/getting-started/" target="_blank" rel="noreferrer">watermill.io / getting started ↗</a><span>ONE API. DIFFERENT TRANSPORTS.</span></div>
+          <div className="slide-footer"><a href="https://watermill.io/learn/getting-started/" target="_blank" rel="noreferrer">watermill.io / getting started ↗</a><span>PUBLISH → HANDLE → MIDDLEWARE</span></div>
         </div>
       </Slide>
-      {reportStories.map(story => <Slide key={story.mode} id={`report-${story.mode}`} notes={story.notes}>
-        <div className="slide-content report-slide"><SlideHeader section={story.step} /><ReportSlide story={story} /><div className="slide-footer"><span>SOURCE: apps/api/internal/server/reports.go</span><span>PUBLISH → SUBSCRIBE → ROUTE → RETRY → PRESERVE</span></div></div>
-      </Slide>)}
+      <LessonSlide id="lesson-publish" section="03 / PUBLISH · THE IDEA" title="A message is data." accent="Publishing sends it." description="Our example: request a weekly team CSV. First send that request as a message; handling comes next." source="https://watermill.io/docs/pub-sub/" notes="First explain only publishing. A message has an ID and a payload; a topic names where it is sent. The Publisher is a transport-facing interface. Publish returns an error, and successful return does not mean business processing is complete. Synchronous versus asynchronous behavior is implementation-dependent. On the next slide, a buffered GoChannel subscription already exists. Publish returns successfully, then the demo observes message availability in its buffered channel without receiving or handling it. No report runs. Cleanup removes that subscription; the next demo publishes its own message. Source: https://watermill.io/docs/pub-sub/.">
+        <div className="lesson-diagram" aria-label="A message is passed to Publisher.Publish and sent to a transport topic">
+          <LessonNode label="DATA" title="Message" detail="ID + payload" /><LessonArrow text="pass to" />
+          <LessonNode label="WATERMILL API" title="Publisher" detail="Publish(topic, msg)" /><LessonArrow text="send to" />
+          <LessonNode label="DESTINATION" title="Topic" detail="reports" />
+        </div>
+        <div className="lesson-takeaway"><strong>Published ≠ processed.</strong><p>A successful call does not say the report is finished.</p></div>
+        <p className="lesson-next">Next: watch only the message cross this boundary. No handler yet.</p>
+      </LessonSlide>
+      <LiveSlide mode="publish" />
+      <LessonSlide id="lesson-subscriber" section="04 / BEFORE HANDLING: DELIVERY" title="Subscriber delivers." accent="Your code does the work." description="The Subscriber is a transport adapter. Subscribe returns a Go channel, not a report-generating function." source="https://watermill.io/docs/pub-sub/" notes="A terminology bridge before introducing the Router. Here bus is created by gochannel.NewGoChannel before this function is called. It implements both Publisher and Subscriber. The Subscriber implementation delivers messages from a transport as a Go channel. A handler is the application function that processes a message; these are not synonyms. With this low-level API, application code receives a message, calls its processing function, and explicitly calls Ack or Nack. Show cancellation and the closed-channel check. This is one finite receive, not a complete long-running consumer loop. The displayed code is extracted from the real subscribed function; publisher/demo staging and a telemetry event are explicitly folded. It is not an additional live demo. The following Router slide automates receiving, invocation, and the outcome. Source: https://watermill.io/docs/pub-sub/.">
+        <div className="subscriber-bridge">
+          <div className="subscriber-roles">
+            <LessonNode label="TRANSPORT ADAPTER" title="Subscriber" detail="Delivers messages into a channel." />
+            <LessonArrow text="your code receives" />
+            <LessonNode label="APPLICATION FUNCTION" title="Handler" detail="Processes a message, such as generating a CSV." />
+            <p className="lesson-small">Here, bus is a GoChannel instance: it implements both Publisher and Subscriber.</p><p className="lesson-small">Without a Router, your receiving code calls Ack() or Nack().</p>
+          </div>
+          <div className="subscriber-source"><p className="lesson-label">ACTUAL GO SOURCE · DEMO STAGING FOLDED</p><pre className="lesson-source" aria-label="Actual Go subscribe implementation"><code>{sourceExcerpt('subscribe').split('\n').map((line, index) => <span className="lesson-code-line" key={index}>{line || ' '}</span>)}</code></pre></div>
+        </div>
+        <p className="lesson-next">Next: let the Router connect delivery to your handler.</p>
+      </LessonSlide>
+      <LessonSlide id="lesson-handle" section="04 / HANDLE · THE IDEA" title="Write the handler." accent="Let the Router connect it." description="A handler is your application function. The Router connects it to a Subscriber and owns the acknowledgement outcome." source="https://watermill.io/docs/messages-router/" notes="Three distinct roles: Subscriber is the transport adapter that delivers messages, handler is the application function that processes each message, and Router is the wiring and lifecycle that subscribes, invokes handlers, and acknowledges outcomes. The highlighted box is a logical ownership diagram, not a separate service or broker. In this no-output handler example the handler returns an error: nil leads to Ack, an error leads to Nack. The contract assumes the handler does not manually acknowledge. Nack requests redelivery, whose details depend on the transport. Make handlers idempotent. The live example will generate a small synthetic CSV. Source: https://watermill.io/docs/messages-router/.">
+        <div className="lesson-router" aria-label="Router connects a Subscriber to an application handler and acknowledges the returned outcome">
+          <div className="lesson-wrapper-label"><strong>Router</strong><span>connects · invokes · acknowledges</span></div>
+          <div className="lesson-diagram lesson-diagram-two"><LessonNode label="DELIVERY" title="Subscriber" detail="Transport adapter" /><LessonArrow text="message" /><LessonNode label="YOUR CODE" title="Handler" detail="Generate the CSV, return an error or nil" /></div>
+          <div className="lesson-outcomes"><span>return nil <b>→</b> Router calls Ack()</span><span>return error <b>→</b> Router calls Nack()</span></div>
+        </div>
+        <p className="lesson-next">Next: one delivery, one handler call, one CSV.</p>
+      </LessonSlide>
+      <LiveSlide mode="router" />
+      <LessonSlide id="lesson-middleware" section="05 / MIDDLEWARE · THE IDEA" title="Keep the handler." accent="Wrap its behavior." description="Middleware runs around the handler. Retry can call that same function again when it returns an error." source="https://watermill.io/docs/middlewares/" notes="Middleware wraps a handler rather than replacing the Subscriber or publishing another message. It can run behavior before or after a handler and inspect the result. This example adds Retry to one Router handler. MaxRetries two means one initial call plus two retries. The generator intentionally returns errors twice and succeeds the third time. The resulting success or final error returns to the Router. Distinguish middleware retry attempts within this delivery from transport redelivery. Keep handler side effects idempotent. Source: https://watermill.io/docs/middlewares/.">
+        <div className="lesson-middleware" aria-label="Retry middleware wraps the same handler and allows three total calls">
+          <div className="lesson-wrapper-label"><strong>Retry middleware</strong><span>MaxRetries: 2</span></div>
+          <div className="lesson-handler-core"><span className="lesson-label">SAME APPLICATION FUNCTION</span><strong>Handler</strong><p>Generate the report</p></div>
+          <ol className="lesson-attempts"><li><span>1</span><strong>Initial call</strong><p>error</p></li><li><span>2</span><strong>Retry</strong><p>error</p></li><li><span>3</span><strong>Retry</strong><p>nil ✓</p></li></ol>
+        </div>
+        <div className="lesson-takeaway"><strong>One message. Three handler calls.</strong><p>Not three publications. Not three transport deliveries.</p></div>
+      </LessonSlide>
+      <LiveSlide mode="retry" />
+      <LessonSlide id="lesson-durable" section="06 / ADVANCED: PERSISTENCE · THE IDEA" title="Same interfaces." accent="Different storage." description="GoChannel keeps nothing on disk. A durable transport can preserve a message until a Subscriber is ready." source="https://watermill.io/pubsubs/sqlite/" notes="This is an advanced extension, separate from the core Publish, Handle, Middleware progression. Persistence comes from the selected transport and its configuration, not from the Router or Retry middleware. The demonstration publishes to a real SQLite file without a Subscriber, closes all connections, opens a new connection pool to the same file, and only then creates the Subscriber and starts the Router. The application process remains running and status is still in memory. This does not test a process crash, power loss, or exactly-once processing. The official SQLite transport is beta. Source: https://watermill.io/pubsubs/sqlite/.">
+        <div className="lesson-disk" aria-label="SQLite keeps the message on disk while all database connections are closed"><span className="lesson-label">SQLITE FILE</span><strong>Message stays here.</strong><p>Even with every database connection closed.</p></div>
+        <ol className="lesson-steps"><li><span>1</span><strong>Publish</strong><p>No Subscriber yet.</p></li><li><span>2</span><strong>Close</strong><p>Every connection closes.</p></li><li><span>3</span><strong>Reopen</strong><p>Start delivery. Do not republish.</p></li></ol>
+        <div className="lesson-takeaway"><strong>Connection restart, not process restart.</strong><p>SQLite transport is beta. This is not an exactly-once claim.</p></div>
+      </LessonSlide>
+      <LiveSlide mode="durable" />
     </Deck>
   )
 }

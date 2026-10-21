@@ -18,8 +18,10 @@ export type ReportStory = {
 }
 
 function keySourceLine(line: string) {
-  return /\.Publish\(|\.Subscribe\(|<-incoming|\.Ack\(|\.Nack\(|AddNoPublisherHandler|middleware\.Retry|MaxRetries:|pub\.Close|db\.Close|openReportDB|NewSubscriber|return nil/.test(line)
+  return /\.Publish\(|\.Subscribe\(|<-incoming|\.Ack\(|\.Nack\(|AddConsumerHandler|AddNoPublisherHandler|middleware\.Retry|MaxRetries:|pub\.Close|db\.Close|openReportDB|NewSubscriber|return nil/.test(line)
 }
+
+const sourceContext: Record<ReportMode, string> = { publish: 'GoChannel · in memory', subscribe: 'Subscriber · receive loop', router: 'Router · application handler', retry: 'Retry · handler middleware', durable: 'SQLite · beta' }
 
 function eventName(kind: string) { return kind.replace(/[_-]/g, ' ') }
 function seconds(at: string, first?: string) {
@@ -64,7 +66,7 @@ export function LiveReport({ mode }: { mode: ReportMode }) {
     void repeat()
     return () => controller.abort()
   }, [mode, restart])
-  const failed = error || run?.error || (run?.status === 'Error' ? 'The report worker stopped.' : '')
+  const failed = error || run?.error || (run?.status === 'Error' ? 'The demo stopped.' : '')
   const visual = reportVisual(mode, run, !!failed)
   return <div className={`report-live ${failed ? 'is-failed' : ''}`} aria-label="Live report demo">
     <header className="report-live-header"><span className="report-label">LIVE · GO API</span><span className="report-cycle">RUN {cycle}</span></header>
@@ -72,10 +74,10 @@ export function LiveReport({ mode }: { mode: ReportMode }) {
       <span className="report-status">{visual.stage}</span><h3>{visual.headline}</h3><span className="report-sr-only">{visual.detail}</span>
     </div>
     <ReportFlow mode={mode} visual={visual} />
-    <div className="report-repeat" aria-label="Replay status">{failed ? 'Automatic replay paused' : countdown !== null ? `Next run in ${countdown}s` : run?.status === 'Ready' ? 'Report complete · confirming cleanup' : 'Auto replay · leaving stops the run'}</div>
+    <div className="report-repeat" aria-label="Replay status">{failed ? 'Automatic replay paused' : countdown !== null ? `Next run in ${countdown}s` : visual.complete ? 'Demo complete · confirming cleanup' : 'Auto replay · leaving stops the run'}</div>
     {failed ? <div className="report-error" role="alert"><p>{failed}</p>{retryable && <button className="report-replay" type="button" onClick={() => setRestart(value => value + 1)}>Try again ↻</button>}</div>
-      : run?.status === 'Ready' ? <div className="report-artifact"><span className="report-label">CSV · SYNTHETIC DATA</span><pre aria-label="Generated report CSV">{run.csv || 'The API returned no CSV.'}</pre></div>
-        : <div className="report-artifact report-artifact-pending"><span className="report-label">CSV OUTPUT</span><span>Waiting for the worker</span></div>}
+      : (mode === 'router' || mode === 'subscribe') && run?.status === 'Ready' ? <div className="report-artifact"><span className="report-label">CSV · SYNTHETIC DATA</span><pre aria-label="Generated report CSV">{run.csv || 'The API returned no CSV.'}</pre></div>
+        : (mode === 'router' || mode === 'subscribe') ? <div className="report-artifact report-artifact-pending"><span className="report-label">APPLICATION RESULT</span><span>Waiting for the handler</span></div> : null}
     <details className="report-details"><summary>Technical details · {run?.events.length ?? 0} server events</summary><div className="report-identity"><span>ONE MESSAGE ID</span><code title={run?.messageId}>{run?.messageId ?? 'Waiting for the API…'}</code></div><ol className="report-timeline" aria-label="Server event timeline">
       {run?.events.map(event => <li key={event.sequence}><span className="report-event-time">{seconds(event.at, run.events[0]?.at)}</span><div><strong>{eventName(event.kind)}</strong><p>{event.detail}</p></div></li>)}
       {!run && !failed && <li className="report-placeholder">Waiting for real server events, not simulated progress.</li>}
@@ -97,7 +99,7 @@ export default function ReportSlide({ story }: { story: ReportStory }) {
     <div className="report-heading"><h2>{story.title} <span className="accent">{story.accent}</span></h2></div>
     <div className="report-columns">
       {active ? <LiveReport mode={story.mode} /> : <div className="report-live report-idle"><header className="report-live-header"><span className="report-label">LIVE DEMO</span><span className="report-cycle">Starts automatically</span></header><div className="report-state"><span className="report-status">Ready to run</span><h3>Follow one message.</h3></div><ReportFlow mode={story.mode} visual={reportVisual(story.mode, null)} /><p className="report-repeat">Starts on entry · repeats after a four-second result hold</p></div>}
-      <div className="report-lesson"><div className="report-code-heading"><span className="report-label">{story.mode === 'durable' ? 'GO SOURCE · CHECKS FOLDED' : 'ACTUAL GO SOURCE'}</span><span>{story.mode === 'durable' ? 'SQLite · beta' : 'GoChannel · in memory'}</span></div><pre className="report-source" aria-label={`Actual Go ${story.mode} implementation`}><code>{story.source.split('\n').map((line, index) => <span key={index} className={keySourceLine(line) ? 'report-code-line is-emphasized' : 'report-code-line'}>{line || ' '}</span>)}</code></pre><details className="report-lesson-details"><summary>Concept &amp; boundaries</summary><p>{story.explanation}</p><p className="report-concept">{story.concept}</p><p className="report-boundary">{story.boundary}</p></details></div>
+      <div className="report-lesson"><div className="report-code-heading"><span className="report-label">{story.mode === 'durable' ? 'GO SOURCE · CHECKS FOLDED' : 'ACTUAL GO SOURCE'}</span><span>{sourceContext[story.mode]}</span></div><pre className="report-source" aria-label={`Actual Go ${story.mode} implementation`}><code>{story.source.split('\n').map((line, index) => <span key={index} className={keySourceLine(line) ? 'report-code-line is-emphasized' : 'report-code-line'}>{line || ' '}</span>)}</code></pre><details className="report-lesson-details"><summary>Concept &amp; boundaries</summary><p>{story.explanation}</p><p className="report-concept">{story.concept}</p><p className="report-boundary">{story.boundary}</p></details></div>
     </div>
   </div>
 }

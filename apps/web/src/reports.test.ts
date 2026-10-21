@@ -11,16 +11,17 @@ const flush = async () => { for (let index = 0; index < 30; index++) await Promi
 beforeEach(async () => { vi.useFakeTimers(); vi.resetModules(); reports = await import('./reports') })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
-it.each(modes)('%s publishes once, observes Ready, and awaits successful cleanup', async mode => {
-  const fetch = vi.fn().mockResolvedValueOnce(reply({ ...queued, mode })).mockResolvedValueOnce(reply({ ...ready, mode })).mockResolvedValue(deleted())
+it.each(modes)('%s observes its terminal outcome and awaits successful cleanup', async mode => {
+  const terminal: ReportRun = mode === 'publish' ? { ...queued, mode, status: 'Published' } : { ...ready, mode }
+  const fetch = vi.fn().mockResolvedValueOnce(reply({ ...queued, mode })).mockResolvedValueOnce(reply(terminal)).mockResolvedValue(deleted())
   vi.stubGlobal('fetch', fetch)
   const update = vi.fn()
   const task = reports.runReportScenario(mode, new AbortController().signal, update)
   await vi.advanceTimersByTimeAsync(200)
-  expect(await task).toEqual({ ...ready, mode })
+  expect(await task).toEqual(terminal)
   expect(fetch).toHaveBeenCalledTimes(3)
   expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST', body: JSON.stringify({ mode }) })
-  expect(update.mock.calls.map(([run]) => run.status)).toEqual(['Queued', 'Ready'])
+  expect(update.mock.calls.map(([run]) => run.status)).toEqual(['Queued', terminal.status])
   expect(fetch.mock.calls[2][1]).toMatchObject({ method: 'DELETE', keepalive: true })
   expect(fetch.mock.calls[2][1].signal.aborted).toBe(false)
   await vi.advanceTimersByTimeAsync(10_000)

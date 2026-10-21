@@ -35,3 +35,57 @@
 @media (prefers-reduced-motion: reduce) { .watermill-deck .slides section { transition: none !important; } }
 
 .watermill-deck .controls button:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+
+/* Explanation slides teach one relationship before the corresponding live run. */
+.watermill-deck .lesson-slide { padding-top: clamp(24px, 2.4vw, 38px); gap: 20px; }
+.watermill-deck .lesson-slide .slide-header { padding-bottom: 14px; }
+.watermill-deck .lesson-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: clamp(18px, 2vw, 28px); }
+.watermill-deck .lesson-heading .eyebrow { margin-bottom: 12px; font-size: 11px; }
+.watermill-deck .lesson-heading h2 { font-size: clamp(30px, 3.5vw, 52px); line-height: 1.12; max-width: 1200px; text-wrap: balance; }
+.watermill-deck .lesson-description { color: var(--muted); font-size: clamp(17px, 1.55vw, 22px); line-height: 1.45; max-width: 1100px; margin-top: 18px; }
+.watermill-deck .lesson-diagram { display: grid; grid-template-columns: minmax(0, 1fr) 80px minmax(0, 1fr) 80px minmax(0, 1fr); gap: 14px; align-items: center; }
+.watermill-deck .lesson-node { padding: clamp(18px, 2vw, 30px); border: 1px solid #658461; background: #1a2e22; border-radius: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.watermill-deck .lesson-label { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .13em; line-height: 1.5; }
+.watermill-deck .lesson-node strong, .watermill-deck .lesson-handler-core > strong { font-size: clamp(23px, 2.4vw, 34px); font-weight: 550; letter-spacing: -.025em; }
+.watermill-deck .lesson-node p { font-size: clamp(15px, 1.4vw, 19px); color: var(--muted); line-height: 1.4; }
+.watermill-deck .lesson-arrow { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); text-align: center; font-size: 12px; line-height: 1.4; }
+.watermill-deck .lesson-arrow b { color: var(--accent); font-size: 38px; line-height: 1; font-weight: 400; }
+.watermill-deck .lesson-takeaway { border-left: 3px solid var(--accent); padding: 10px 0 10px 20px; }
+.watermill-deck .lesson-takeaway strong { font-size: clamp(20px, 1.8vw, 26px); font-weight: 550; }
+.watermill-deck .lesson-takeaway p, .watermill-deck .lesson-small { color: var(--muted); font-size: clamp(15px, 1.3vw, 18px); line-height: 1.45; margin-top: 8px; }
+.watermill-deck .lesson-next { color: #d0dfce; font-size: clamp(15px, 1.4vw, 20px); line-height: 1.4; }
+.watermill-deck .lesson-slide .slide-footer { font-size: 10px; padding-top: 8px; }
+.watermill-deck .subscriber-bridge { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.3fr); gap: 30px; align-items: center; }
+.watermill-deck .subscriber-roles { display: flex; flex-direction: column; gap: 10px; }
+.watermill-deck .subscriber-roles .lesson-node { padding: 18px 22px; gap: 6px; }
+.watermill-deck .subscriber-roles .lesson-arrow { flex-direction: row; justify-content: center; }
+.watermill-deck .subscriber-roles .lesson-arrow b { transform: rotate(90deg); font-size: 28px; }
+.watermill-deck .subscriber-source { min-width: 0; }
+.watermill-deck .subscriber-source > .lesson-label { margin-bottom: 12px; }
+.watermill-deck .lesson-source { background: #09120e; border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 0; font: clamp(12px, 1.04vw, 16px)/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
+.watermill-deck .lesson-code-line { display: block; }
+.watermill-deck .lesson-router, .watermill-deck .lesson-middleware { border: 1px solid #79966d; background: #14261c; border-radius: 18px; padding: 24px; }
+.watermill-deck .lesson-wrapper-label { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 22px; }
+.watermill-deck .lesson-wrapper-label strong { color: var(--accent); font-size: 23px; font-weight: 550; }
+.watermill-deck .lesson-wrapper-label > span { color: var(--muted); font-size: 15px; }
+.watermill-deck .lesson-diagram-two { grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1fr); }
+.watermill-deck .lesson-outcomes { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 16px; margin-top: 22px; font-size: clamp(15px, 1.5vw, 21px); }
+.watermill-deck .lesson-outcomes b { color: var(--accent); margin: 0 10px; }
+.watermill-deck .lesson-middleware { display: grid; grid-template-columns: .85fr 1.4fr; gap: 20px 36px; }
+.watermill-deck .lesson-middleware .lesson-wrapper-label { grid-column: 1 / -1; margin-bottom: 0; }
+.watermill-deck .lesson-handler-core { padding: 22px; border: 1px solid #658461; border-radius: 12px; background: #213625; display: flex; flex-direction: column; gap: 10px; }
+.watermill-deck .lesson-handler-core p { color: var(--muted); font-size: 16px; }
+.watermill-deck .lesson-attempts, .watermill-deck .lesson-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items: center; }
+.watermill-deck .lesson-attempts li { border-left: 1px solid var(--line); padding-left: 20px; }
+.watermill-deck .lesson-attempts li > span, .watermill-deck .lesson-steps li > span { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #344b31; color: var(--accent); font: 13px ui-monospace, monospace; margin-bottom: 15px; }
+.watermill-deck .lesson-attempts strong, .watermill-deck .lesson-steps strong { display: block; font-size: clamp(19px, 1.7vw, 24px); font-weight: 550; }
+.watermill-deck .lesson-attempts p { margin-top: 10px; font: 17px ui-monospace, monospace; color: #ffb695; }
+.watermill-deck .lesson-attempts li:last-child p { color: var(--accent); }
+.watermill-deck .lesson-disk { border: 1px solid #779467; border-radius: 50% / 18%; background: #1d3323; padding: 28px 34px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.watermill-deck .lesson-disk strong { font-size: clamp(25px, 2.4vw, 34px); font-weight: 550; }
+.watermill-deck .lesson-disk p { color: var(--muted); font-size: 18px; line-height: 1.4; }
+.watermill-deck .lesson-steps { align-items: start; }
+.watermill-deck .lesson-steps li { padding: 0 20px 0 0; }
+.watermill-deck .lesson-steps p { font-size: 16px; color: var(--muted); line-height: 1.4; margin-top: 8px; }
+@media (min-width: 1000px) and (max-height: 800px) { .watermill-deck .lesson-slide { padding-bottom: 54px; gap: 16px; }.watermill-deck .lesson-body { gap: 20px; }.watermill-deck .lesson-heading h2 { font-size: 40px; }.watermill-deck .lesson-description { margin-top: 14px; font-size: 18px; }.watermill-deck .lesson-node { padding: 20px; }.watermill-deck .lesson-source { font-size: 12px; padding: 16px; }.watermill-deck .lesson-router, .watermill-deck .lesson-middleware { padding: 20px; }.watermill-deck .lesson-disk { padding: 22px; } }
+@media (max-width: 850px) { .watermill-deck .lesson-diagram { grid-template-columns: minmax(0, 1fr); gap: 10px; }.watermill-deck .lesson-diagram .lesson-arrow { flex-direction: row; justify-content: center; }.watermill-deck .lesson-diagram .lesson-arrow b { transform: rotate(90deg); font-size: 28px; }.watermill-deck .subscriber-bridge { grid-template-columns: 1fr; gap: 24px; }.watermill-deck .lesson-middleware { grid-template-columns: 1fr; gap: 20px; }.watermill-deck .lesson-body { justify-content: flex-start; }.watermill-deck .lesson-outcomes { justify-content: flex-start; font-size: 15px; }.watermill-deck .lesson-wrapper-label { flex-wrap: wrap; }.watermill-deck .lesson-attempts { gap: 10px; }.watermill-deck .lesson-attempts li { padding-left: 10px; }.watermill-deck .lesson-attempts strong { font-size: 17px; }.watermill-deck .lesson-steps { gap: 10px; }.watermill-deck .lesson-steps li { padding: 0; }.watermill-deck .lesson-steps strong { font-size: 19px; }.watermill-deck .lesson-steps p { font-size: 14px; }.watermill-deck .lesson-disk { padding: 30px 20px; }.watermill-deck .lesson-disk p { font-size: 16px; } }

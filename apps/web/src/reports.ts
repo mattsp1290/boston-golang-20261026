@@ -3,7 +3,7 @@ export type ReportEvent = { sequence: number; kind: string; detail: string; at: 
 export type ReportRun = {
   id: string
   mode: ReportMode
-  status: 'Queued' | 'Processing' | 'Ready' | 'Error'
+  status: 'Queued' | 'Processing' | 'Published' | 'Ready' | 'Error'
   attempts: number
   messageId: string
   events: ReportEvent[]
@@ -12,7 +12,7 @@ export type ReportRun = {
 }
 
 const modes: ReportMode[] = ['publish', 'subscribe', 'router', 'retry', 'durable']
-const statuses = ['Queued', 'Processing', 'Ready', 'Error']
+const statuses = ['Queued', 'Processing', 'Published', 'Ready', 'Error']
 
 export function parseReportRun(data: unknown): ReportRun {
   if (typeof data !== 'object' || data === null) throw new Error('Unexpected report response')
@@ -115,7 +115,7 @@ async function executeScenario(mode: ReportMode, signal: AbortSignal, update: (r
     const messageId = run.messageId
     while (!controller.signal.aborted) {
       update(run)
-      if (run.status === 'Ready' || run.status === 'Error') return run
+      if (run.status === 'Ready' || run.status === 'Published' || run.status === 'Error') return run
       await reportDelay(200, controller.signal)
       run = await readResponse(await fetch(`/api/reports/runs/${encodeURIComponent(id)}`, { signal: controller.signal }))
       if (run.id !== id || run.mode !== mode || run.messageId !== messageId) throw new Error('The report identity changed unexpectedly.')

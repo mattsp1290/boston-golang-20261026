@@ -12,22 +12,26 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.location.hash = '' })
 
-it('initializes the real deck with eight slides and confirmed speaker details', async () => {
+it('teaches Publish, Handle, and Middleware through explanation/demo pairs with a delivery bridge', async () => {
   const { container } = render(<App />)
   await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
-  expect(container.querySelectorAll('.slides > section')).toHaveLength(8)
+  expect(container.querySelectorAll('.slides > section')).toHaveLength(12)
   expect(container.querySelector('#title')).toHaveClass('present')
   expect(screen.getByRole('heading', { name: 'Watermill.' })).toBeInTheDocument()
   expect(container.querySelector('#speaker')).toHaveTextContent('Matt Spurlin')
   expect(container.querySelector('#speaker')).toHaveTextContent('Senior Software Engineerat Datadog')
   expect(container.querySelector('#speaker a')).toHaveAttribute('href', 'https://github.com/mattsp1290')
-  expect(container.querySelector('#watermill')).toHaveTextContent('Publish & subscribe')
-  expect(container.querySelector('#watermill')).toHaveTextContent('Compose middleware')
-  expect(container.querySelector('#watermill')).toHaveAttribute('data-notes', expect.stringContaining('idempotent'))
-  expect(container.querySelector('#report-publish')).toHaveTextContent('Accept the request.')
-  expect(container.querySelector('#report-subscribe')).toHaveTextContent('Receive the message.')
-  expect(container.querySelector('#report-subscribe')).toHaveTextContent('Subscribe(ctx, topic)')
-  expect(container.querySelector('#report-subscribe')).toHaveTextContent('closed messages channel')
+  expect([...container.querySelectorAll('#watermill .concepts h3')].map(item => item.textContent)).toEqual(['Publish', 'Handle', 'Middleware'])
+  expect([...container.querySelectorAll('.slides > section')].map(slide => slide.id)).toEqual([
+    'title', 'speaker', 'watermill', 'lesson-publish', 'report-publish', 'lesson-subscriber',
+    'lesson-handle', 'report-router', 'lesson-middleware', 'report-retry', 'lesson-durable', 'report-durable',
+  ])
+  expect(container.querySelector('#report-subscribe')).not.toBeInTheDocument()
+  expect(container.querySelector('#lesson-publish')).toHaveTextContent('Published ≠ processed.')
+  expect(container.querySelector('#report-publish')).toHaveTextContent('No handler runs and no CSV is generated')
+  expect(container.querySelector('#report-publish')).toHaveAttribute('data-notes', expect.stringContaining('does not prove offline retention'))
+  expect(container.querySelector('#lesson-subscriber')).toHaveTextContent('Subscriber is a transport adapter')
+  expect(container.querySelector('#lesson-subscriber')).toHaveTextContent('bus is a GoChannel instance')
   const subscriberSource = container.querySelector('[aria-label="Actual Go subscribe implementation"]')
   expect(subscriberSource).toHaveTextContent('.Subscribe(')
   expect(subscriberSource).toHaveTextContent('ctx.Done()')
@@ -35,20 +39,30 @@ it('initializes the real deck with eight slides and confirmed speaker details', 
   expect(subscriberSource).toHaveTextContent('.Nack()')
   expect(subscriberSource).toHaveTextContent('if !ok')
   expect(subscriberSource).toHaveTextContent('publisher and demo staging')
-  expect(subscriberSource?.querySelectorAll('.report-code-line').length).toBeLessThanOrEqual(12)
-  expect(container.querySelector('#report-publish')).toHaveAttribute('data-notes', expect.stringContaining('five-part story'))
-  expect(container.querySelector('#report-subscribe')).toHaveAttribute('data-notes', expect.stringContaining('four seconds'))
-  expect([...container.querySelectorAll('.slides > section')].map(slide => slide.id)).toEqual([
-    'title', 'speaker', 'watermill', 'report-publish', 'report-subscribe', 'report-router', 'report-retry', 'report-durable',
-  ])
-  expect(container.querySelector('#report-router')).toHaveTextContent('05 / HANDLE THE MESSAGE')
-  expect(container.querySelector('#report-retry')).toHaveTextContent('06 / RETRY A TRANSIENT FAILURE')
-  expect(container.querySelector('#report-durable')).toHaveTextContent('07 / KEEP WORK WHILE THE WORKER IS OFFLINE')
-  expect(container.querySelector('#report-router')).toHaveTextContent('Return nil')
+  expect(subscriberSource?.querySelectorAll('.lesson-code-line').length).toBeLessThanOrEqual(12)
+  expect(container.querySelector('#lesson-handle')).toHaveTextContent('handler is your application function')
+  expect(container.querySelector('#lesson-handle')).toHaveTextContent('Router calls Ack()')
+  expect(container.querySelector('#lesson-handle')).toHaveTextContent('Router calls Nack()')
+  expect(container.querySelector('[aria-label="Actual Go router implementation"]')).toHaveTextContent('AddConsumerHandler')
+  expect(container.querySelector('[aria-label="Actual Go router implementation"]')).toHaveTextContent('demo completion signal')
+  expect(container.querySelector('#lesson-middleware')).toHaveTextContent('One message. Three handler calls.')
   expect(container.querySelector('#report-retry')).toHaveTextContent('Finish on attempt three.')
+  expect(container.querySelector('#lesson-durable')).toHaveTextContent('Connection restart, not process restart.')
   expect(container.querySelector('#report-durable')).toHaveTextContent('SQLite')
-  expect(container.querySelector('#report-durable')).toHaveTextContent('Starts automatically')
   expect(container.querySelector('#report-durable')).toHaveAttribute('data-notes', expect.stringContaining('not a process crash'))
+  for (const slide of container.querySelectorAll('.lesson-slide')) {
+    expect(slide.querySelector('a')).toHaveAttribute('href', expect.stringMatching(/^https:\/\/watermill.io\//))
+    expect(slide.querySelector('.report-live')).not.toBeInTheDocument()
+  }
+}, 15_000)
+
+it.each(['lesson-publish', 'lesson-subscriber', 'lesson-handle', 'lesson-middleware', 'lesson-durable'])('never starts a live run on the %s explanation slide', async id => {
+  window.location.hash = `#/${id}`
+  const fetch = vi.fn()
+  vi.stubGlobal('fetch', fetch)
+  const { container } = render(<App />)
+  await waitFor(() => expect(container.querySelector(`#${id}`)).toHaveClass('present'), { timeout: 5000 })
+  expect(fetch).not.toHaveBeenCalled()
 })
 
 it('moves forward and back with native controls and updates the hash', async () => {
@@ -97,8 +111,8 @@ it('toggles the native overview without overriding its transform', async () => {
   await waitFor(() => expect(deck).not.toHaveClass('overview'))
 })
 
-it('starts only the current subscriber from a direct hash and stops for real overview and navigation', async () => {
-  window.location.hash = '#/report-subscribe'
+it('starts only active live slides and stops for explanation slides, overview, and unmount', async () => {
+  window.location.hash = '#/report-router'
   let sequence = 0
   let maxActiveRuns = 0
   const activeRuns = new Set<string>()
@@ -126,9 +140,13 @@ it('starts only the current subscriber from a direct hash and stops for real ove
   vi.stubGlobal('fetch', fetch)
   const { container, unmount } = render(<App />)
   const deck = container.querySelector('.reveal')!
-  await waitFor(() => expect(container.querySelector('#report-subscribe')).toHaveClass('present'), { timeout: 5000 })
+  const move = async (direction: 'next' | 'previous', id: string) => {
+    fireEvent.click(screen.getByRole('button', { name: `${direction} slide` }))
+    await waitFor(() => expect(container.querySelector(`#${id}`)).toHaveClass('present'))
+  }
+  await waitFor(() => expect(container.querySelector('#report-router')).toHaveClass('present'), { timeout: 5000 })
   await waitFor(() => expect(sequence).toBe(1))
-  expect(starts).toEqual([{ mode: 'subscribe', slide: 'report-subscribe', overview: false }])
+  expect(starts).toEqual([{ mode: 'router', slide: 'report-router', overview: false }])
   expect(activeRuns.size).toBe(1)
 
   fireEvent.keyDown(document, { key: 'Escape', keyCode: 27, which: 27 })
@@ -143,40 +161,49 @@ it('starts only the current subscriber from a direct hash and stops for real ove
   fireEvent.keyDown(document, { key: 'Escape', keyCode: 27, which: 27 })
   await waitFor(() => expect(deck).not.toHaveClass('overview'))
   await waitFor(() => expect(sequence).toBe(2))
-  fireEvent.click(screen.getByRole('button', { name: 'next slide' }))
-  await waitFor(() => expect(container.querySelector('#report-router')).toHaveClass('present'))
-  await waitFor(() => expect(sequence).toBe(3))
-  expect(deleted(2)).toBe(true)
-  expect(starts.map(start => start.mode)).toEqual(['subscribe', 'subscribe', 'router'])
+  await move('next', 'lesson-middleware')
+  await waitFor(() => expect(deleted(2)).toBe(true))
+  expect(activeRuns.size).toBe(0)
+  const explanationReads = reads()
+  await new Promise(resolve => setTimeout(resolve, 450))
+  expect(sequence).toBe(2)
+  expect(reads()).toBe(explanationReads)
 
-  fireEvent.click(screen.getByRole('button', { name: 'previous slide' }))
-  await waitFor(() => expect(container.querySelector('#report-subscribe')).toHaveClass('present'))
+  await move('next', 'report-retry')
+  await waitFor(() => expect(sequence).toBe(3))
+  await move('previous', 'lesson-middleware')
+  await waitFor(() => expect(deleted(3)).toBe(true))
+  await move('previous', 'report-router')
   await waitFor(() => expect(sequence).toBe(4))
-  expect(deleted(3)).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: 'previous slide' }))
-  await waitFor(() => expect(container.querySelector('#report-publish')).toHaveClass('present'))
+  await move('previous', 'lesson-handle')
+  await waitFor(() => expect(deleted(4)).toBe(true))
+  await move('previous', 'lesson-subscriber')
+  expect(sequence).toBe(4)
+  expect(activeRuns.size).toBe(0)
+  await move('previous', 'report-publish')
   await waitFor(() => expect(sequence).toBe(5))
-  expect(deleted(4)).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: 'previous slide' }))
-  await waitFor(() => expect(container.querySelector('#watermill')).toHaveClass('present'))
+  await move('previous', 'lesson-publish')
   await waitFor(() => expect(deleted(5)).toBe(true))
   expect(activeRuns.size).toBe(0)
+  await move('previous', 'watermill')
   const openingReads = reads()
   await new Promise(resolve => setTimeout(resolve, 450))
   expect(sequence).toBe(5)
   expect(reads()).toBe(openingReads)
 
-  fireEvent.click(screen.getByRole('button', { name: 'next slide' }))
+  await move('next', 'lesson-publish')
+  expect(sequence).toBe(5)
+  await move('next', 'report-publish')
   await waitFor(() => expect(sequence).toBe(6))
   unmount()
   await waitFor(() => expect(deleted(6)).toBe(true))
   expect(activeRuns.size).toBe(0)
   expect(maxActiveRuns).toBe(1)
   expect(starts).toEqual([
-    { mode: 'subscribe', slide: 'report-subscribe', overview: false },
-    { mode: 'subscribe', slide: 'report-subscribe', overview: false },
     { mode: 'router', slide: 'report-router', overview: false },
-    { mode: 'subscribe', slide: 'report-subscribe', overview: false },
+    { mode: 'router', slide: 'report-router', overview: false },
+    { mode: 'retry', slide: 'report-retry', overview: false },
+    { mode: 'router', slide: 'report-router', overview: false },
     { mode: 'publish', slide: 'report-publish', overview: false },
     { mode: 'publish', slide: 'report-publish', overview: false },
   ])

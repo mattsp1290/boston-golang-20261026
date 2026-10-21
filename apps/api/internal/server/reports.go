@@ -78,7 +78,7 @@ func (r *reportRun) process(msg *message.Message) error {
 	attempt := r.view.Attempts
 	r.view.Status = "Processing"
 	r.mu.Unlock()
-	r.event("attempt", fmt.Sprintf("Worker received %s · attempt %d", msg.UUID, attempt))
+	r.event("attempt", fmt.Sprintf("Application handler invoked for %s · attempt %d", msg.UUID, attempt))
 	if err := r.pause(); err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (r *reportRun) routed(sub message.Subscriber, publish func() error) error {
 	}
 	done := make(chan struct{}, 1)
 	// demo:router:start
-	handler := router.AddNoPublisherHandler("generate-report", reportTopic, sub,
+	handler := router.AddConsumerHandler("generate-report", reportTopic, sub,
 		func(msg *message.Message) error {
 			if err := r.process(msg); err != nil {
 				return err
@@ -234,8 +234,34 @@ func (r *reportRun) durable() error {
 	}
 	// demo:durable:end
 	defer sub.Close()
-	r.event("db-reopened", "New SQLite connections opened. Start a new Router worker; do not republish.")
+	r.event("db-reopened", "New SQLite connections opened. Start the subscriber and Router; do not republish.")
 	return r.routed(sub, nil)
+}
+
+// publication observes a buffered delivery without invoking application code.
+// The subscriber exists before Publish because GoChannel is live-only.
+func (r *reportRun) publication(bus *gochannel.GoChannel) error {
+	incoming, err := bus.Subscribe(r.ctx, reportTopic)
+	if err != nil {
+		return err
+	}
+	r.event("subscriber-listening", "A live GoChannel subscriber is listening; no handler is attached.")
+	if err := r.publish(bus); err != nil {
+		return err
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if len(incoming) > 0 {
+			r.event("available", "The message became available in the subscriber's buffered channel. No application handler ran.")
+			return nil
+		}
+		select {
+		case <-r.ctx.Done():
+			return r.ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // subscribed demonstrates one finite message; a long-lived worker would keep reading.
@@ -261,7 +287,7 @@ func (r *reportRun) subscribed(bus *gochannel.GoChannel) error {
 			return err
 		}
 		msg.Ack()
-		r.event("ack", "Subscriber acknowledged successful work")
+		r.event("ack", "Application receive loop called Ack after successful work")
 		return nil
 	}
 	// demo:subscribe:end
@@ -279,18 +305,23 @@ func (r *reportRun) execute() {
 	} else {
 		bus := gochannel.NewGoChannel(gochannel.Config{OutputChannelBuffer: 1}, watermill.NopLogger{})
 		defer bus.Close()
-		if r.view.Mode == "publish" || r.view.Mode == "subscribe" {
+		if r.view.Mode == "publish" {
+			err = r.publication(bus)
+		} else if r.view.Mode == "subscribe" {
 			err = r.subscribed(bus)
 		} else {
 			err = r.routed(bus, func() error { return r.publish(bus) })
 		}
 	}
 	r.mu.Lock()
-	kind, detail := "ready", "Synthetic CSV is ready. Worker finished."
+	kind, detail := "ready", "Synthetic CSV is ready. Handler finished."
 	if err != nil {
 		r.view.Status = "Error"
 		r.view.Error = err.Error()
 		kind, detail = "error", err.Error()
+	} else if r.view.Mode == "publish" {
+		r.view.Status = "Published"
+		kind, detail = "publication-complete", "Publication observed. No handler or report generation in this demonstration."
 	} else {
 		r.view.Status = "Ready"
 	}
