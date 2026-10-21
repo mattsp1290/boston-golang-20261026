@@ -1,61 +1,110 @@
 .watermill-deck .report-slide { gap: 16px; padding-top: clamp(20px, 2.4vw, 34px); }
 .watermill-deck .report-slide .slide-header { padding-bottom: 12px; }
-.watermill-deck .report-story { flex: 1; display: flex; flex-direction: column; gap: 20px; }
-.watermill-deck .report-heading .eyebrow { margin-bottom: 8px; font-size: 11px; }
-.watermill-deck .report-heading h2 { font-size: clamp(30px, 3.4vw, 49px); line-height: 1.04; }
-.watermill-deck .report-explanation { color: var(--muted); font-size: clamp(14px, 1.25vw, 18px); line-height: 1.4; margin-top: 11px; max-width: 1000px; }
-.watermill-deck .report-columns { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.25fr); gap: clamp(20px, 2.5vw, 36px); align-items: start; }
+.watermill-deck .report-story { flex: 1; display: flex; flex-direction: column; gap: 24px; }
+.watermill-deck .report-heading h2 { max-width: 1200px; font-size: clamp(30px, 3.4vw, 49px); line-height: 1.12; text-wrap: balance; }
+.watermill-deck .report-columns { display: grid; grid-template-columns: minmax(0, 1.9fr) minmax(280px, 1fr); gap: clamp(18px, 2vw, 32px); align-items: start; }
 .watermill-deck .report-lesson { min-width: 0; padding-top: 5px; }
-.watermill-deck .report-code-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--muted); font-size: 11px; }
+.watermill-deck .report-code-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 5px 10px; margin-bottom: 10px; color: var(--muted); font-size: 11px; }
 .watermill-deck .report-label { color: var(--accent); font-size: 10px; line-height: 1.5; letter-spacing: .12em; font-weight: 650; }
-.watermill-deck .report-source { background: #09120e; border: 1px solid var(--line); border-radius: 12px; padding: 15px; overflow: auto; margin: 0; font: clamp(12px, 1.05vw, 15px)/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; max-height: 320px; scrollbar-width: thin; scrollbar-color: #526e59 transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
-.watermill-deck .report-concept { font-size: clamp(14px, 1.3vw, 19px); line-height: 1.45; margin-top: 14px; }
-.watermill-deck .report-boundary { color: var(--muted); font-size: clamp(12px, 1vw, 14px); line-height: 1.45; margin-top: 10px; }
-.watermill-deck .report-live { background: linear-gradient(145deg, #1b3023, #14251d); border: 1px solid #57754c; border-radius: 16px; padding: 22px; min-width: 0; box-shadow: 0 12px 45px #0002; }
+.watermill-deck .report-source { background: #09120e; border: 1px solid var(--line); border-radius: 12px; padding: 15px; overflow: auto; margin: 0; font: clamp(12px, 1.03vw, 15px)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; max-height: 380px; scrollbar-width: thin; scrollbar-color: #526e59 transparent; white-space: pre-wrap; overflow-wrap: anywhere; }
+.watermill-deck .report-code-line { display: block; padding: 0 7px; border-left: 2px solid transparent; margin: 0 -7px; }
+.watermill-deck .report-code-line.is-emphasized { color: #d4f8b3; background: #1a2e20; border-left-color: #96c771; }
+.watermill-deck .report-lesson-details { margin-top: 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.watermill-deck .report-lesson-details summary { cursor: pointer; color: #c3d9c9; font-size: 12px; }
+.watermill-deck .report-lesson-details p { margin-top: 12px; }
+.watermill-deck .report-lesson-details .report-concept { color: #edf5ef; }
+.watermill-deck .report-live { background: linear-gradient(145deg, #1b3023, #12221b); border: 1px solid #57754c; border-radius: 18px; padding: 20px 22px 16px; min-width: 0; box-shadow: 0 12px 45px #0002; }
 .watermill-deck .report-live-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.watermill-deck .report-cycle { color: var(--muted); font: 11px ui-monospace, monospace; white-space: nowrap; }
-.watermill-deck .report-state { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px; min-height: 194px; padding: 20px 0; }
-.watermill-deck .report-status { color: var(--accent); text-transform: uppercase; font-size: 13px; font-weight: 700; letter-spacing: .13em; }
-.watermill-deck .report-state h3 { font-size: clamp(32px, 3.35vw, 52px); line-height: 1.06; font-weight: 650; margin: 10px 0; letter-spacing: -.045em; text-wrap: balance; }
-.watermill-deck .report-state p { color: #bdd0c1; font-size: clamp(14px, 1.2vw, 17px); line-height: 1.4; max-width: 450px; }
-.watermill-deck .report-attempt { text-align: center; padding-left: 15px; border-left: 1px solid #496043; }
-.watermill-deck .report-attempt strong { display: block; color: var(--accent); font-size: clamp(42px, 5vw, 72px); font-weight: 550; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
-.watermill-deck .report-attempt span { display: block; color: #b4cab7; font-size: 9px; line-height: 1.45; letter-spacing: .12em; margin-top: 8px; }
-.watermill-deck .status-retrying .report-status, .watermill-deck .status-retrying .report-attempt strong { color: #ffd18e; }
+.watermill-deck .report-cycle { color: #b9ccbd; font: 11px ui-monospace, monospace; white-space: nowrap; }
+.watermill-deck .report-state { padding: 17px 0 7px; min-height: 84px; }
+.watermill-deck .report-status { display: block; color: var(--accent); text-transform: uppercase; font-size: 10px; font-weight: 700; letter-spacing: .13em; margin-bottom: 7px; }
+.watermill-deck .report-state h3 { font-size: clamp(21px, 2.05vw, 30px); line-height: 1.15; font-weight: 600; margin: 0; letter-spacing: -.035em; text-wrap: balance; }
+.watermill-deck .status-retrying .report-status { color: #ffb695; }
 .watermill-deck .status-ready h3 { color: var(--accent); }
 .watermill-deck .status-error .report-status, .watermill-deck .status-error h3 { color: #ffd1c3; }
-.watermill-deck .report-stages { list-style: none; display: flex; padding: 0; margin: 0; gap: 7px; }
-.watermill-deck .report-stages li { display: flex; flex: 1; min-width: 0; align-items: center; gap: 7px; border: 1px solid #3c5445; background: #112018; border-radius: 8px; padding: 10px 8px; color: #9eb3a5; font-size: clamp(11px, 1vw, 14px); line-height: 1.25; font-weight: 550; }
-.watermill-deck .report-stage-marker { display: grid; place-items: center; width: 20px; height: 20px; flex-shrink: 0; border-radius: 50%; background: #2e4436; font-size: 10px; }
-.watermill-deck .report-stages .is-reached { color: #d4e9c7; border-color: #658355; }
-.watermill-deck .report-stages .is-current { color: #14241a; background: var(--accent); border-color: var(--accent); }
-.watermill-deck .report-stages .is-current .report-stage-marker { background: #24432c; color: #edf6df; }
-.watermill-deck .report-repeat { color: #b1c8b6; font-size: 12px; line-height: 1.5; padding: 13px 0; min-height: 44px; }
-.watermill-deck .report-artifact { border-top: 1px solid var(--line); padding-top: 10px; }
-.watermill-deck .report-artifact pre { margin: 6px 0 0; font: 12px/1.4 ui-monospace, monospace; white-space: pre; overflow: auto; max-height: 62px; color: #d7edc7; }
-.watermill-deck .report-artifact-pending p { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 6px; min-height: 45px; }
-.watermill-deck .report-details { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 12px; }
-.watermill-deck .report-details summary { color: #a9c0ad; font-size: 11px; cursor: pointer; }
-.watermill-deck .report-details summary:focus-visible, .watermill-deck .report-replay:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.watermill-deck .report-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* A spatial diagram, not an animated progress meter. Only the API moves the token. */
+.watermill-deck .report-flow { margin: 0; color: #a8bdb0; }
+.watermill-deck .report-flow-canvas { overflow-x: auto; scrollbar-width: thin; scrollbar-color: #7c9878 transparent; }
+.watermill-deck .report-flow-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.watermill-deck .flow-scroll-hint { display: none; }
+.watermill-deck .report-flow svg { display: block; width: 100%; height: auto; overflow: visible; font-family: inherit; }
+.watermill-deck .flow-card { fill: #14261e; stroke: #547160; stroke-width: 2; }
+.watermill-deck .flow-icon { fill: none; stroke: #a7c0ae; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.watermill-deck .flow-name { fill: #f0f7ee; font-size: 23px; font-weight: 600; text-anchor: middle; letter-spacing: -.4px; }
+.watermill-deck .flow-caption { fill: #b9cebf; font-size: 15px; font-weight: 450; text-anchor: middle; }
+.watermill-deck .flow-verb { fill: #b9cebf; font-size: 14px; text-anchor: middle; }
+.watermill-deck .flow-link { stroke: #698470; stroke-width: 3; stroke-dasharray: 4 5; }
+.watermill-deck .flow-link.is-observed { stroke: #c3f294; stroke-dasharray: none; }
+.watermill-deck .flow-arrow-tip { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.watermill-deck .flow-station.is-observed .flow-card { stroke: #90ad82; }
+.watermill-deck .flow-station.is-active .flow-card, .watermill-deck .flow-station.is-retained .flow-card { fill: #293c26; stroke: #c3f294; stroke-width: 3; }
+.watermill-deck .flow-station.is-active .flow-icon, .watermill-deck .flow-station.is-retained .flow-icon { stroke: #c3f294; }
+.watermill-deck .flow-message { transition: transform 420ms ease-in-out; }
+.watermill-deck .flow-message > rect { fill: #f6d58a; stroke: #ffebbc; stroke-width: 2; }
+.watermill-deck .flow-message > path { fill: none; stroke: #42351a; stroke-width: 1.5; stroke-linejoin: round; }
+.watermill-deck .flow-message > text { fill: #42351a; font-size: 11px; font-weight: 750; text-anchor: middle; }
+.watermill-deck .flow-message.is-paused > rect { fill: #d6b994; stroke: #e4cdb0; }
+.watermill-deck .worker-offline .flow-card { fill: #19221d; stroke: #728277; stroke-dasharray: 7 6; }
+.watermill-deck .worker-offline .flow-worker-rotor { opacity: .3; }
+.watermill-deck .worker-offline .flow-caption { fill: #ffc2a8; font-weight: 700; letter-spacing: 1px; }
+.watermill-deck .flow-offline-cross { fill: none; stroke: #d69580; stroke-width: 4; stroke-linecap: round; }
+.watermill-deck .worker-online .flow-card, .watermill-deck .worker-processing .flow-card { stroke: #c3f294; stroke-width: 3; }
+.watermill-deck .worker-processing .flow-worker-rotor { stroke: #c3f294; }
+.watermill-deck .is-working .flow-worker-rotor { animation: report-worker-spin 2.5s linear infinite; }
+.watermill-deck .worker-retrying .flow-card, .watermill-deck .worker-error .flow-card { fill: #392b24; stroke: #ffb695; stroke-width: 3; }
+.watermill-deck .worker-retrying .flow-caption, .watermill-deck .worker-error .flow-caption { fill: #ffbf9c; }
+.watermill-deck .flow-error-mark circle { fill: #ffb695; stroke: #392b24; stroke-width: 2; }
+.watermill-deck .flow-error-mark path { fill: none; stroke: #522c1b; stroke-width: 2.5; stroke-linecap: round; }
+.watermill-deck .flow-retained rect { fill: #c3f294; }
+.watermill-deck .flow-retained path { fill: none; stroke: #253b1d; stroke-width: 2; }
+.watermill-deck .flow-retained text { fill: #253b1d; font-size: 13px; font-weight: 750; text-anchor: middle; letter-spacing: .5px; }
+.watermill-deck .flow-station.is-complete .flow-card { stroke: #c3f294; fill: #253e28; stroke-width: 3; }
+.watermill-deck .flow-station.is-complete .flow-icon { stroke: #c3f294; }
+.watermill-deck .flow-complete-mark circle { fill: #c3f294; }
+.watermill-deck .flow-complete-mark path { fill: none; stroke: #253b1d; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.watermill-deck .flow-pending-file { stroke-dasharray: 3 5; }
+.watermill-deck .flow-retry > path { fill: none; stroke: #6e786b; stroke-width: 2.5; stroke-dasharray: 5 6; }
+.watermill-deck .flow-retry-label { fill: #bac7b5; text-anchor: middle; font-size: 13px; letter-spacing: .5px; font-weight: 650; }
+.watermill-deck .flow-retry.has-errors > path { stroke: #c88b69; }
+.watermill-deck .flow-retry.is-retrying > path { stroke: #ffb695; stroke-dasharray: none; stroke-width: 4; }
+.watermill-deck .flow-retry.is-retrying .flow-retry-label { fill: #ffbf9c; }
+.watermill-deck .flow-attempts circle { fill: #1c3122; stroke: #c3f294; stroke-width: 1.5; }
+.watermill-deck .flow-attempts text { fill: #e2f0dc; text-anchor: middle; font-size: 12px; font-weight: 700; }
+.watermill-deck .flow-attempts path { stroke: #c3f294; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.watermill-deck .flow-attempts .is-error circle { fill: #4d3024; stroke: #ffb695; }
+.watermill-deck .flow-attempts .is-error path { stroke: #ffc5a5; }
+.watermill-deck .flow-ack > path { fill: none; stroke: #c3f294; stroke-width: 3; }
+.watermill-deck .flow-ack rect { fill: #c3f294; }
+.watermill-deck .flow-ack text { fill: #253b1d; font-size: 14px; font-weight: 700; text-anchor: middle; }
+.watermill-deck .report-flow figcaption { display: flex; align-items: center; gap: 8px; color: #c4d5c6; font-size: 11px; line-height: 1.4; }
+.watermill-deck .flow-token-key { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 4px; background: #f6d58a; color: #42351a; font-weight: 750; flex-shrink: 0; }
+.watermill-deck .report-flow figcaption code { font: 10px ui-monospace, monospace; color: #e4d5b7; margin-left: 4px; }
+.watermill-deck .flow-observation { margin-left: auto; color: #a9bfaf; }
+.watermill-deck .report-repeat { color: #aec6b4; font-size: 11px; line-height: 1.5; padding: 8px 0 12px; }
+.watermill-deck .report-artifact { display: flex; align-items: flex-start; gap: 16px; border-top: 1px solid var(--line); padding-top: 10px; min-height: 65px; }
+.watermill-deck .report-artifact .report-label { padding-top: 2px; }
+.watermill-deck .report-artifact pre { margin: 0; font: 12px/1.4 ui-monospace, monospace; white-space: pre; overflow: auto; max-height: 58px; color: #d7edc7; }
+.watermill-deck .report-artifact-pending > span:last-child { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.watermill-deck .report-details { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 3px; }
+.watermill-deck .report-details summary { color: #b9cebf; font-size: 11px; cursor: pointer; }
+.watermill-deck .report-details summary:focus-visible, .watermill-deck .report-replay:focus-visible, .watermill-deck .report-lesson-details summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .watermill-deck .report-identity { display: flex; flex-direction: column; gap: 5px; padding-top: 12px; }
 .watermill-deck .report-identity span { font-size: 9px; color: var(--muted); letter-spacing: .12em; }
 .watermill-deck .report-identity code { color: #e3ecd8; font: 11px ui-monospace, monospace; overflow-wrap: anywhere; }
 .watermill-deck .report-timeline { list-style: none; margin: 14px 0 0; padding: 0; max-height: 150px; overflow: auto; scrollbar-width: thin; scrollbar-color: #526e59 transparent; }
 .watermill-deck .report-timeline li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 9px; padding: 0 0 11px; }
-.watermill-deck .report-event-time { color: #8ba891; font: 10px/1.6 ui-monospace, monospace; padding-top: 1px; }
+.watermill-deck .report-event-time { color: #a3beaa; font: 10px/1.6 ui-monospace, monospace; padding-top: 1px; }
 .watermill-deck .report-timeline strong { display: block; color: #ecf6e5; font-size: 12px; font-weight: 650; text-transform: capitalize; line-height: 1.45; }
 .watermill-deck .report-timeline p { color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; margin-top: 2px; }
 .watermill-deck .report-timeline .report-placeholder { display: block; color: var(--muted); font-size: 13px; line-height: 1.5; padding-top: 12px; }
 .watermill-deck .report-error { color: #ffd1c3; border-top: 1px solid #755145; padding-top: 12px; font-size: 13px; line-height: 1.45; }
 .watermill-deck .report-replay { background: transparent; border: 1px solid #829c77; border-radius: 7px; padding: 8px 10px; margin-top: 10px; color: #e2f0df; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .watermill-deck .report-replay:hover { background: #2c4332; }
-.watermill-deck .report-idle { min-height: 360px; display: flex; flex-direction: column; justify-content: center; }
-.watermill-deck .report-idle h3 { font-size: clamp(30px, 3vw, 44px); line-height: 1.1; margin: 15px 0; }
-.watermill-deck .report-idle p { font-size: 16px; line-height: 1.5; color: var(--muted); }
-.watermill-deck .report-idle-states { color: var(--accent); font-size: 17px; line-height: 1.5; margin-top: 28px; }
 .watermill-deck .report-slide .slide-footer { font-size: 10px; padding-top: 4px; }
-.watermill-deck .report-code-line { display: block; padding: 0 7px; border-left: 2px solid transparent; margin: 0 -7px; }
-.watermill-deck .report-code-line.is-emphasized { color: #d4f8b3; background: #1a2e20; border-left-color: #96c771; }
-@media (min-width: 1000px) and (max-height: 800px) { .watermill-deck .report-slide { padding-bottom: 56px; gap: 12px; }.watermill-deck .report-heading h2 { font-size: 36px; }.watermill-deck .report-story { gap: 15px; }.watermill-deck .report-explanation { font-size: 15px; }.watermill-deck .report-source { font-size: 12px; max-height: 298px; padding: 12px; }.watermill-deck .report-live { padding: 17px; }.watermill-deck .report-state { min-height: 176px; padding: 15px 0; }.watermill-deck .report-state h3 { font-size: 38px; }.watermill-deck .report-concept { font-size: 15px; }.watermill-deck .report-boundary { font-size: 12px; } }
-@media (max-width: 900px) { .watermill-deck .report-columns { grid-template-columns: minmax(0, 1fr); gap: 20px; }.watermill-deck .report-live { grid-row: 1; padding: 18px; }.watermill-deck .report-heading h2 { font-size: clamp(32px, 6vw, 48px); }.watermill-deck .report-code-heading { flex-wrap: wrap; gap: 5px; }.watermill-deck .report-source { font-size: 13px; max-height: none; }.watermill-deck .report-state { min-height: 200px; }.watermill-deck .report-state h3 { font-size: clamp(36px, 7vw, 52px); }.watermill-deck .report-state p { font-size: 15px; }.watermill-deck .report-explanation { font-size: 16px; }.watermill-deck .report-boundary { font-size: 13px; }.watermill-deck .report-stages li { font-size: 12px; } }
-@media (max-width: 480px) { .watermill-deck .report-state { gap: 12px; }.watermill-deck .report-state h3 { font-size: 33px; }.watermill-deck .report-attempt { padding-left: 10px; }.watermill-deck .report-attempt strong { font-size: 45px; }.watermill-deck .report-stages li { flex-direction: column; align-items: flex-start; padding: 8px; font-size: 11px; }.watermill-deck .report-repeat { font-size: 11px; } }
+@keyframes report-worker-spin { to { transform: rotate(360deg); } }
+@media (min-width: 1000px) and (max-height: 800px) { .watermill-deck .report-slide { padding-bottom: 54px; gap: 12px; }.watermill-deck .report-heading h2 { font-size: 36px; }.watermill-deck .report-story { gap: 18px; }.watermill-deck .report-source { font-size: 12px; max-height: 338px; padding: 12px; }.watermill-deck .report-live { padding: 16px 18px 12px; }.watermill-deck .report-state { min-height: 75px; padding-top: 13px; }.watermill-deck .report-state h3 { font-size: 24px; } }
+@media (max-width: 1000px) { .watermill-deck .report-columns { grid-template-columns: minmax(0, 1fr); gap: 22px; }.watermill-deck .report-heading h2 { font-size: clamp(28px, 4.8vw, 42px); }.watermill-deck .report-source { font-size: 14px; max-height: none; }.watermill-deck .report-state h3 { font-size: clamp(23px, 3.5vw, 31px); }.watermill-deck .report-lesson-details { font-size: 14px; } }
+@media (max-width: 600px) { .watermill-deck .report-live { padding: 16px 12px 13px; }.watermill-deck .report-story { gap: 18px; }.watermill-deck .report-state { min-height: 92px; }.watermill-deck .report-flow svg { min-width: 640px; }.watermill-deck .flow-scroll-hint { display: inline; margin-left: auto; color: #a9bfaf; }.watermill-deck .flow-name { font-size: 27px; }.watermill-deck .flow-caption { font-size: 18px; }.watermill-deck .flow-verb { font-size: 17px; }.watermill-deck .flow-observation { display: none; }.watermill-deck .report-artifact { flex-direction: column; gap: 6px; min-height: 84px; }.watermill-deck .report-source { font-size: 12px; }.watermill-deck .report-flow figcaption { font-size: 10px; } }
+@media (prefers-reduced-motion: reduce) { .watermill-deck .flow-message { transition: none; }.watermill-deck .flow-worker-rotor { animation: none !important; } }

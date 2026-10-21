@@ -1,58 +1,68 @@
 import type { ReportMode, ReportRun } from './reports'
 
-// State labels describe observed API facts, never elapsed-time progress.
-export function reportVisual(mode: ReportMode, run: ReportRun | null) {
-  const observed = new Set(run?.events.map(event => event.kind))
-  const latestWork = run?.events.findLast(event => event.kind === 'attempt' || event.kind === 'retry')?.kind
+export type TokenLocation = 'none' | 'app' | 'transport' | 'worker' | 'artifact'
+export type WorkerState = 'waiting' | 'offline' | 'online' | 'processing' | 'retrying' | 'complete' | 'error'
+
+/** Project observed snapshots, not a clock-driven simulation of message transit. */
+export function reportVisual(mode: ReportMode, run: ReportRun | null, stopped = false) {
+  const events = run?.events ?? []
+  const observed = new Set(events.map(event => event.kind))
+  const latestWork = events.findLast(event => event.kind === 'attempt' || event.kind === 'retry')?.kind
+  const failed = stopped || run?.status === 'Error' || !!run?.error
   const ready = run?.status === 'Ready'
-  const processing = run?.status === 'Processing'
-  let stage = run ? run.status : 'Connecting'
-  let headline = 'Starting the report…'
-  let detail = 'Waiting for the Go API. No work is shown until the server confirms it.'
-  if (run) {
-    headline = 'Your request is queued.'
-    detail = 'The API accepted your report request. The worker has not finished the report.'
-    if (mode === 'durable' && observed.has('worker-offline')) {
-      stage = 'Worker offline'; headline = 'No worker is running.'
-      detail = 'The API will publish to a real SQLite file without an active subscriber.'
-    }
-    if (mode === 'durable' && observed.has('db-closed')) {
-      stage = 'Saved on disk'; headline = 'The message is on disk.'
-      detail = 'Every database connection is closed. The queued message is preserved.'
-    }
-    if (mode === 'durable' && observed.has('db-reopened')) {
-      detail = 'The same database file is reopened. The message was not republished.'
-    }
-    if (mode === 'durable' && observed.has('worker-online')) {
-      stage = 'Worker starts'; headline = 'A worker is online.'
-      detail = 'The subscriber can now receive the message saved in SQLite.'
-    }
-    if (processing) {
-      stage = 'Processing'; headline = 'Generating the report.'
-      detail = mode === 'subscribe' ? 'The subscriber received the message and is doing the work before Ack.' : 'The worker is processing the same message that the API accepted.'
-      if (mode === 'retry' && run.attempts > 1) headline = run.attempts === 3 ? 'Third attempt. Same message.' : 'Trying the same message again.'
-    }
-    if (mode === 'retry' && latestWork === 'retry' && !ready) {
-      stage = 'Retrying'; headline = 'Temporary error. Try again.'
-      detail = 'Retry middleware will call the handler again. No second message is published.'
-    }
-    if (ready) {
-      stage = 'Ready'; headline = 'Your report is ready.'
-      detail = mode === 'subscribe' ? 'The subscriber finished the CSV and acknowledged the message.' : 'The worker finished successfully. This CSV came from the Go API.'
-    }
+  const attempts = run?.attempts ?? 0
+  const received = attempts > 0 || observed.has('attempt')
+  const acknowledged = observed.has('ack')
+  const published = observed.has('published')
+  const durable = mode === 'durable'
+  // The attempt can race the worker-online event; receipt itself proves startup.
+  const workerOnline = observed.has('worker-online')
+  const offline = durable && observed.has('worker-offline') && !workerOnline && !received && !ready
+  const retrying = mode === 'retry' && latestWork === 'retry' && !ready && !failed
+  const working = run?.status === 'Processing' && !retrying && !failed && !offline
+  const diskClosed = durable && observed.has('db-closed') && !observed.has('db-reopened')
+  const diskRetained = durable && observed.has('db-closed') && !received && !ready
+  const failedAttempts: number[] = []
+  let attempt = 0
+  for (const event of events) {
+    if (event.kind === 'attempt') attempt++
+    if (event.kind === 'retry' && attempt > 0 && !failedAttempts.includes(attempt)) failedAttempts.push(attempt)
   }
-  const labels = mode === 'durable' ? ['Worker offline', 'Saved on disk', 'Worker starts', 'Ready']
-    : mode === 'retry' ? ['Queued', 'Processing', 'Retrying', 'Ready'] : ['Queued', 'Processing', 'Ready']
-  const current = mode === 'durable' && processing ? 'Worker starts' : stage
-  const reached = (label: string) => {
-    if (label === 'Queued') return !!run
-    if (label === 'Processing') return (run?.attempts ?? 0) > 0
-    if (label === 'Retrying') return observed.has('retry')
-    if (label === 'Worker offline') return observed.has('worker-offline')
-    if (label === 'Saved on disk') return observed.has('db-closed')
-    if (label === 'Worker starts') return observed.has('worker-online') || processing || ready
-    return ready
+
+  let token: TokenLocation = !run ? 'none' : 'app'
+  if (published || (durable && observed.has('db-closed'))) token = 'transport'
+  if (received && !offline) token = 'worker'
+  if (ready) token = 'artifact'
+  let workerState: WorkerState = offline ? 'offline' : workerOnline ? 'online' : 'waiting'
+  if (received && !offline) workerState = 'processing'
+  if (retrying) workerState = 'retrying'
+  if (ready && !offline) workerState = 'complete'
+  if (failed && received && !offline) workerState = 'error'
+
+  let stage = run ? run.status as string : 'Connecting'
+  let headline = 'Waiting for the API.'
+  if (run) headline = published ? 'Message published. Work is separate.' : 'Request accepted. Work comes next.'
+  if (durable && run && offline) {
+    stage = 'Worker offline'; headline = published ? 'On disk. No worker needed.' : 'No worker is running.'
   }
-  return { stage, headline, detail, steps: labels.map(label => ({ label, current: label === current, reached: reached(label) })) }
+  if (diskRetained) {
+    stage = 'Saved on disk'; headline = diskClosed ? 'Connections closed. Message preserved.' : 'Same file. Same message.'
+  }
+  if (durable && workerOnline && !received) {
+    stage = 'Worker starts'; headline = 'Worker online. Read the saved message.'
+  }
+  if (working) {
+    stage = 'Processing'; headline = mode === 'subscribe' ? 'Received. Work first, then Ack.' : 'One message. Worker generating the CSV.'
+    if (mode === 'retry' && attempts > 1) headline = attempts === 3 ? 'Third attempt. Same message.' : 'Retry the handler, not the publish.'
+  }
+  if (retrying) { stage = 'Retrying'; headline = 'Temporary error. Same message, try again.' }
+  if (ready) { stage = 'Ready'; headline = 'Your report is ready.' }
+  if (acknowledged && ready && (mode === 'subscribe' || mode === 'publish')) headline = 'CSV ready. Ack observed.'
+  if (failed) { stage = 'Error'; headline = 'The demo stopped.' }
+
+  const location = { none: 'No message observed.', app: 'Accepted request at the app.', transport: durable ? 'Message in SQLite on disk.' : 'Message in the in-memory GoChannel.', worker: 'Same message at the worker.', artifact: 'CSV complete.' }[token]
+  const detail = [location, offline ? 'Worker offline; no receipt or worker-online event yet.' : working ? `Worker processing attempt ${attempts}.` : retrying ? `Attempt ${attempts} failed; waiting for the next handler call.` : '', diskRetained ? 'Message retained after all database connections closed.' : '', acknowledged ? 'Explicit Ack event observed.' : 'No explicit Ack event observed.', failed ? 'Automatic replay paused.' : ''].filter(Boolean).join(' ')
+  return { stage, headline, detail, token, messageId: run?.messageId, transport: durable ? 'disk' as const : 'memory' as const, published, received, acknowledged, ready, failed, working, workerOnline, workerState, offline, diskRetained, diskClosed, retrying, attempts, failedAttempts }
 }
 
+export type ReportVisual = ReturnType<typeof reportVisual>
