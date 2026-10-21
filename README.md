@@ -152,3 +152,20 @@ The slides extract their Go snippets from `apps/api/internal/server/chat.go` dur
 - [Fiber streaming API](https://docs.gofiber.io/next/api/ctx/#sendstreamwriter)
 - [Fiber v3.6.1 context source](https://github.com/gofiber/fiber/blob/v3.6.1/ctx.go)
 - [MDN: server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)
+
+## Build and run both applications
+
+From the repository root:
+
+```sh
+./scripts/build.sh
+./scripts/run.sh
+```
+
+Both scripts also work from another working directory when invoked by their full path. They require Bash, Node.js 24.15+ on the 24.x line or Node.js 26+, and npm 10+. Building additionally requires Go 1.26+. `build.sh` performs a clean lockfile install with `npm ci`, then builds both the React/TypeScript frontend into `apps/web/dist` and the Go API into `bin/api`. It stops immediately on an install or build failure.
+
+`run.sh` runs those existing build outputs without rebuilding: the API and Vite preview start together, and either process exiting stops its sibling. Ctrl-C or SIGTERM stops both. Run `build.sh` again after changing source. The script reports a missing build before starting either process.
+
+Open http://127.0.0.1:5173 and advance to slide 6 for the automatic demo. The frontend origin proxies `/api` to the Go API (default http://127.0.0.1:3000), including SSE streams. The preview uses a strict port rather than silently selecting another one. This is a **local presentation preview, not production hosting**; it does not introduce Python.
+
+An optional repository-root `.env` is loaded for both processes; existing shell variables take precedence. To change the API port, set both `API_ADDR` (for example `127.0.0.1:3300`) and `API_PROXY_TARGET` (`http://127.0.0.1:3300`) in `.env` or the environment. Do not expose the unauthenticated demo API to an untrusted network. The separate `npm run dev` command remains available for development with frontend hot reload.
