@@ -4,6 +4,10 @@ import { cleanup, createEvent, fireEvent, render, screen, waitFor } from '@testi
 import '@testing-library/jest-dom/vitest'
 import { StrictMode } from 'react'
 import App from './App'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+const appStyles = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'App.css'), 'utf8')
 
 beforeEach(() => {
   window.location.hash = ''
@@ -47,23 +51,29 @@ it('teaches Publish, Handle, and Middleware through explanation/demo pairs with 
   expect(container.querySelector('[aria-label="Actual Go router implementation"]')).toHaveTextContent('demo completion signal')
   expect(container.querySelector('#lesson-middleware')).toHaveTextContent('One message. Three handler calls.')
   expect(container.querySelector('#report-retry')).toHaveTextContent('Finish on attempt three.')
-  expect(container.querySelector('#lesson-durable')).toHaveTextContent('Connection restart, not process restart.')
   expect(container.querySelector('#report-durable')).toHaveTextContent('PostgreSQL')
-  expect(container.querySelector('#lesson-durable')).toHaveTextContent('not a universal Watermill default')
-  expect(container.querySelector('#lesson-durable')).toHaveTextContent('Same report handler.')
-  expect(container.querySelector('#lesson-durable')).toHaveTextContent('r.process(msg)')
-  expect(container.querySelector('#lesson-durable')).toHaveTextContent('REPORT_POSTGRES_DSN')
-  expect(container.querySelector('#lesson-durable a')).toHaveAttribute('href', 'https://watermill.io/pubsubs/sql/')
-  const memoryConfig = container.querySelector('[aria-label="Actual GoChannel adapter configuration"]')
-  const sqlConfig = container.querySelector('[aria-label="Actual PostgreSQL adapter configuration"]')
-  expect(memoryConfig).toHaveTextContent('gochannel.NewGoChannel')
-  expect(sqlConfig).toHaveTextContent('wmsql.NewPublisher')
-  expect(sqlConfig).toHaveTextContent('wmsql.NewSubscriber')
-  expect(sqlConfig).toHaveTextContent('DefaultPostgreSQLSchema')
-  expect(sqlConfig).toHaveTextContent('DefaultPostgreSQLOffsetsAdapter')
-  expect(sqlConfig).toHaveTextContent('BeginnerFromStdSQL(db)')
-  expect(sqlConfig).toHaveTextContent('after close and reconnect')
-  expect(sqlConfig?.textContent?.split('\n').length).toBeLessThanOrEqual(22)
+  const transportLesson = container.querySelector('#lesson-durable')!
+  expect(transportLesson.querySelectorAll('pre')).toHaveLength(1)
+  expect(transportLesson.querySelector('.transport-comparison')).not.toBeInTheDocument()
+  expect(transportLesson.querySelector('.lesson-takeaway')).not.toBeInTheDocument()
+  const diff = container.querySelector('[aria-label="GoChannel to PostgreSQL code diff"]')!
+  expect(diff).toHaveTextContent('- bus := gochannel.NewGoChannel')
+  expect(diff).toHaveTextContent('- pub := message.Publisher(bus)')
+  expect(diff).toHaveTextContent('- sub = bus')
+  expect(diff).toHaveTextContent('+ pub, err := wmsql.NewPublisher(')
+  expect(diff).toHaveTextContent('+ sub, err = wmsql.NewSubscriber(')
+  expect(diff).toHaveTextContent('SchemaAdapter: schema, OffsetsAdapter: offsets')
+  expect(diff).toHaveTextContent('Same application handler: r.process(msg)')
+  expect(diff.querySelectorAll('.is-removed')).toHaveLength(3)
+  expect(diff.querySelectorAll('.is-added')).toHaveLength(11)
+  expect(diff.querySelectorAll('.transport-diff-line')).toHaveLength(15)
+  expect(diff.textContent?.endsWith('\n')).toBe(false)
+  expect(Math.max(...diff.textContent!.split('\n').map(line => line.length))).toBeLessThanOrEqual(70)
+  expect(appStyles).toContain('font-size: 20px; line-height: 1.2; padding: 12px 20px;')
+  expect(appStyles).toContain('overflow-x: auto; white-space: pre;')
+  expect(transportLesson).toHaveTextContent('Setup omitted:')
+  expect(transportLesson).toHaveAttribute('data-notes', expect.stringContaining('DefaultPostgreSQLSchema'))
+  expect(transportLesson.querySelector('a')).toHaveAttribute('href', 'https://watermill.io/pubsubs/sql/')
   const durableSource = container.querySelector('[aria-label="Actual Go durable implementation"]')
   expect(durableSource).toHaveTextContent('pub.Close()')
   expect(durableSource).toHaveTextContent('db.Close()')

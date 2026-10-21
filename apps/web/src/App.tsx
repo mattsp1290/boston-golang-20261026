@@ -84,6 +84,25 @@ const reportStories: Record<LessonMode, ReportStory & { notes: string; footer: s
   },
 }
 
+// A configuration diff, not the temporal order of the persistence demo.
+const transportDiff = [
+  '- bus := gochannel.NewGoChannel(gochannel.Config{}, logger)',
+  '- pub := message.Publisher(bus)',
+  '- sub = bus // the same GoChannel implements both interfaces',
+  '+ pub, err := wmsql.NewPublisher(',
+  '+   wmsql.BeginnerFromStdSQL(db),',
+  '+   wmsql.PublisherConfig{SchemaAdapter: schema}, logger)',
+  '+ // … check err …',
+  '+ sub, err = wmsql.NewSubscriber(',
+  '+   wmsql.BeginnerFromStdSQL(db),',
+  '+   wmsql.SubscriberConfig{',
+  '+     SchemaAdapter: schema, OffsetsAdapter: offsets,',
+  '+     ConsumerGroup: "report-worker",',
+  '+   }, logger)',
+  '+ // … check err …',
+  '  // Same application handler: r.process(msg)',
+]
+
 const config: DeckProps['config'] = {
   width: '100%', height: '100%', margin: 0, disableLayout: true,
   center: false, embedded: true, hash: true, controls: true, progress: true,
@@ -207,21 +226,9 @@ export default function App() {
         <div className="lesson-takeaway"><strong>One message. Three handler calls.</strong><p>Not three publications. Not three transport deliveries.</p></div>
       </LessonSlide>
       <LiveSlide mode="retry" />
-      <LessonSlide id="lesson-durable" section="06 / ADVANCED: PERSISTENCE · THE IDEA" title="Swap the transport." accent="Keep the handler." description="GoChannel is our starting in-memory choice, not a universal Watermill default. Replace its Publisher and Subscriber adapters with PostgreSQL." source="https://watermill.io/pubsubs/sql/" notes="This is an advanced extension, separate from the core Publish, Handle, Middleware progression. GoChannel implements both Publisher and Subscriber in one in-memory adapter; it is not the universal Watermill default. The real configuration excerpts show a move to the official Watermill SQL PostgreSQL adapters. The SQL Publisher inserts messages; the SQL Subscriber polls stored rows and tracks consumer-group offsets. The schema and offsets adapters are PostgreSQL-specific. Configuration excerpts are shown together for comparison, but the demo constructs the SQL Subscriber only after reconnecting. The same r.process application handler and Router acknowledgement contract remain unchanged. Persistence comes from the selected transport and configuration, not the Router or Retry middleware. The demo publishes with no Subscriber, closes its database connection pool, reconnects to the same database, and then starts delivery without republishing. PostgreSQL and the application process keep running; no process restart, power loss, or exactly-once processing is demonstrated. REPORT_POSTGRES_DSN must point to a reachable PostgreSQL database; without it the live slide shows an actionable error instead of simulating storage. Source: https://watermill.io/pubsubs/sql/.">
-        <div className="transport-comparison" aria-label="Actual Go configuration comparison: GoChannel to PostgreSQL">
-          <div className="transport-config transport-config-memory">
-            <div className="transport-config-heading"><span className="lesson-label">START HERE · IN MEMORY</span><h3>GoChannel</h3></div>
-            <pre className="lesson-source" aria-label="Actual GoChannel adapter configuration"><code>{sourceExcerpt('gochannel')}</code></pre>
-            <p className="lesson-small">One adapter implements Publisher + Subscriber. No database; no offline retention in this configuration.</p>
-            <div className="transport-handler"><span className="lesson-label">UNCHANGED APPLICATION CODE</span><strong>Same report handler.</strong><p>The Router still calls <code>r.process(msg)</code>.</p></div>
-          </div>
-          <div className="transport-config transport-config-postgres">
-            <div className="transport-config-heading"><span className="lesson-label">SWAP ADAPTERS · WATERMILL SQL</span><h3>PostgreSQL</h3></div>
-            <pre className="lesson-source" aria-label="Actual PostgreSQL adapter configuration"><code>{sourceExcerpt('postgres-publisher') + '\n// … after close and reconnect, create the Subscriber …\n' + sourceExcerpt('postgres-subscriber')}</code></pre>
-            <p className="transport-source-note">Actual reports.go excerpts · pool, table setup, cleanup and checks omitted. Set REPORT_POSTGRES_DSN.</p>
-          </div>
-        </div>
-        <div className="lesson-takeaway"><strong>Connection restart, not process restart.</strong><p>Next: publish with no Subscriber, close connections, reconnect, then consume. No republish.</p></div>
+      <LessonSlide id="lesson-durable" section="06 / ADVANCED: PERSISTENCE · THE IDEA" title="Swap the transport." accent="Keep the handler." description="GoChannel → PostgreSQL. Only the transport wiring changes." source="https://watermill.io/pubsubs/sql/" notes="This is an advanced extension, separate from the core Publish, Handle, Middleware progression. GoChannel implements both Publisher and Subscriber in one in-memory adapter; it is not the universal Watermill default. The illustrative configuration diff shows a move to the official Watermill SQL PostgreSQL adapters. The SQL Publisher inserts messages; the SQL Subscriber polls stored rows and tracks consumer-group offsets. The schema and offsets adapters are PostgreSQL-specific. The diff assumes db is an open database/sql pool, logger is a Watermill logger, schema is DefaultPostgreSQLSchema, offsets is DefaultPostgreSQLOffsetsAdapter, and sub is declared message.Subscriber. Database/table initialization, imports, cleanup, and error checks are omitted here but implemented in reports.go. The GoChannel side reuses one instance for both interfaces. Constructors are shown together for comparison, but the demo constructs the SQL Subscriber only after reconnecting. The same r.process application handler and Router acknowledgement contract remain unchanged. Persistence comes from the selected transport and configuration, not the Router or Retry middleware. The demo publishes with no Subscriber, closes its database connection pool, reconnects to the same database, and then starts delivery without republishing. PostgreSQL and the application process keep running; no process restart, power loss, or exactly-once processing is demonstrated. REPORT_POSTGRES_DSN must point to a reachable PostgreSQL database; without it the live slide shows an actionable error instead of simulating storage. Source: https://watermill.io/pubsubs/sql/.">
+        <pre className="transport-diff" aria-label="GoChannel to PostgreSQL code diff"><code>{transportDiff.map((line, index) => <span key={index} className={`transport-diff-line ${line.startsWith('+') ? 'is-added' : line.startsWith('-') ? 'is-removed' : 'is-context'}`}>{line}{index < transportDiff.length - 1 ? '\n' : ''}</span>)}</code></pre>
+        <p className="transport-diff-note">Setup omitted: db, logger, PostgreSQL schema/offsets, and var sub message.Subscriber. − GoChannel · + PostgreSQL</p>
       </LessonSlide>
       <LiveSlide mode="durable" />
     </Deck>
