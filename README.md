@@ -116,16 +116,17 @@ Watermill offers common interfaces across transports, not identical delivery gua
 
 ## Live Watermill + SSE chat demo
 
-Run `npm ci` and `npm run dev`, then open the Vite URL and navigate to the two new chat slides, or visit `/demo` directly. No broker, account, or external service is needed. This is a local teaching demo, not a publicly deployed chat service.
+Run `npm ci` and `npm run dev`, then open the Vite URL and navigate to slides 4–6. Slide 6 is the live demo and starts automatically; `/demo` remains available for manual exploration. No broker, account, or external service is needed. This is a local teaching demo, not a publicly deployed chat service.
 
-### Presenter runbook (about two minutes)
+### Presenter runbook (hands-free, about 25 seconds)
 
-1. Explain the split: HTTP POST sends; browser `EventSource` receives one-way SSE.
-2. Open **Launch live demo**. Wait for Alice and Bob to be connected. They are two independent real HTTP streams, not simulated clients.
-3. Send from Alice. Compare the same message ID in the publish/fanout display and both chat panes. One publication becomes two independent subscriber queue entries.
-4. Disconnect Bob. Send another message from Alice: Alice still receives it. Reconnect Bob: the missed message does **not** reappear because this is live-only pub/sub.
-5. Open another demo tab to add two more actual subscribers. Server totals include all tabs; browser receipt indicators are local to the current tab.
-6. Return to the deck with the demo's back link.
+1. Explain slides 4 and 5: HTTP POST sends; browser EventSource receives; Watermill provides independent fanout.
+2. Advance to slide 6. No clicking or typing is needed. It waits for both actual server subscriptions, then Alice and Bob each publish a message.
+3. Watch Bob disconnect, Alice receive alone, and Bob reconnect. A final message reaches both, but Bob's missed message never appears. Message IDs and receipt badges come from real SSE events, not simulated timers.
+4. The finite scenario stops and closes both streams. Leave and return to replay from a fresh state. Leaving early, unmounting, or opening the slide overview cancels in-flight requests, timers, and streams.
+5. If the API is unavailable or a delivery times out, the slide shows a stopped/error message instead of pretending success or retrying forever. Start the API, then leave and return to retry.
+
+The separate `/demo` route still supports manual chat exploration. Other open demo tabs share the same local topic; close them for a distraction-free presentation. No server reset or destructive operation is needed for replay.
 
 ### What is actually running
 

@@ -12,10 +12,10 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.location.hash = '' })
 
-it('initializes the real deck with five slides and confirmed speaker details', async () => {
+it('initializes the real deck with six slides and confirmed speaker details', async () => {
   const { container } = render(<App />)
   await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
-  expect(container.querySelectorAll('.slides > section')).toHaveLength(5)
+  expect(container.querySelectorAll('.slides > section')).toHaveLength(6)
   expect(container.querySelector('#title')).toHaveClass('present')
   expect(screen.getByRole('heading', { name: 'Watermill.' })).toBeInTheDocument()
   expect(container.querySelector('#speaker')).toHaveTextContent('Matt Spurlin')
@@ -26,7 +26,7 @@ it('initializes the real deck with five slides and confirmed speaker details', a
   expect(container.querySelector('#watermill')).toHaveAttribute('data-notes', expect.stringContaining('idempotent'))
   expect(container.querySelector('#chat-flow')).toHaveTextContent('h.bus.Publish(chatTopic, msg)')
   expect(container.querySelector('#chat-fanout')).toHaveTextContent('h.bus.Subscribe(ctx, chatTopic)')
-  expect(container.querySelector('#chat-fanout a[href="/demo"]')).toHaveTextContent('Launch live demo')
+  expect(container.querySelector('#chat-demo')).toHaveTextContent('starts automatically')
 })
 
 it('moves forward and back with native controls and updates the hash', async () => {

@@ -3,6 +3,7 @@ import type { DeckProps } from '@revealjs/react'
 import RevealNotes from 'reveal.js/plugin/notes'
 import 'reveal.js/reveal.css'
 import './App.css'
+import AutoChatSlide from './AutoChatSlide'
 import chatSource from '../../api/internal/server/chat.go?raw'
 
 function sourceExcerpt(name: string) {
@@ -68,17 +69,20 @@ export default function App() {
             <div className="chat-architecture"><span>Browser → HTTP POST</span><span>Fiber → Watermill topic</span><span>SSE → every connected browser</span></div>
             <div className="chat-explanation"><p>HTTP accepts the message once. EventSource keeps a receive-only connection open. Watermill separates publishing from live delivery.</p><pre aria-label="Actual Go publish implementation"><code>{sourceExcerpt('publish')}</code></pre></div>
           </div>
-          <div className="slide-footer"><span>ACTUAL SOURCE: apps/api/internal/server/chat.go</span><a href="/demo">Open the live chat demo ↗</a></div>
+          <div className="slide-footer"><span>ACTUAL SOURCE: apps/api/internal/server/chat.go</span><span>LIVE DEMO ON SLIDE 6 →</span></div>
         </div>
       </Slide>
       <Slide id="chat-fanout" notes="Each EventSource connection has its own Watermill subscription. Sharing one Go channel between browsers would distribute messages instead of broadcasting. GoChannel is in-process and live-only: no durable broker, no missed-message replay, and no exactly-once guarantee. We bound connections and queues, admit one publisher at a time, Ack at the SSE queue boundary, and disconnect slow consumers. Ack does not prove browser delivery. Demo: send once; see Alice and Bob receive the same ID. Disconnect Bob, send again, then reconnect Bob: the missed message stays missing. Open a second tab to prove these are actual server connections.">
         <div className="slide-content chat-slide">
           <SlideHeader section="04 / WHERE WATERMILL HELPS" />
           <div className="intro-body"><p className="eyebrow">ONE PUBLICATION. INDEPENDENT SUBSCRIBERS.</p><h2>Publish once.<br /><span className="accent">Fan out to the room.</span></h2>
-            <div className="chat-explanation"><pre aria-label="Actual Watermill configuration"><code>{sourceExcerpt('bus') + '\n\n' + sourceExcerpt('subscribe')}</code></pre><div><h3>Watch the boundary</h3><p>Send a message. Match its ID in Alice and Bob. Disconnect Bob and send again: Alice keeps receiving.</p><p className="chat-caveat">Local GoChannel demo: bounded queues, live only, no replay. An Ack means queued for SSE, not read by a browser. Production needs explicit durability and delivery design.</p><a className="demo-button" href="/demo">Launch live demo →</a></div></div>
+            <div className="chat-explanation"><pre aria-label="Actual Watermill configuration"><code>{sourceExcerpt('bus') + '\n\n' + sourceExcerpt('subscribe')}</code></pre><div><h3>Watch the boundary</h3><p>Send a message. Match its ID in Alice and Bob. Disconnect Bob and send again: Alice keeps receiving.</p><p className="chat-caveat">Local GoChannel demo: bounded queues, live only, no replay. An Ack means queued for SSE, not read by a browser. Production needs explicit durability and delivery design.</p><p className="demo-button">Next slide: watch it happen →</p></div></div>
           </div>
           <div className="slide-footer"><a href="https://watermill.io/pubsubs/gochannel/" target="_blank" rel="noreferrer">WATERMILL / GOCHANNEL ↗</a><span>NO BROKER REQUIRED FOR THIS DEMO.</span></div>
         </div>
+      </Slide>
+      <Slide id="chat-demo" notes="No clicks needed: entering starts a finite real-network scenario. Alice and Bob connect, exchange messages, Bob disconnects, Alice receives alone, then Bob reconnects without replay and both receive a new message. Leaving or opening overview stops timers and streams; returning replays from the start. API must be running. Errors stop rather than loop.">
+        <div className="slide-content automated-demo-slide"><SlideHeader section="05 / WATCH IT HAPPEN" /><AutoChatSlide /></div>
       </Slide>
     </Deck>
   )
