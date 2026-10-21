@@ -1,0 +1,29 @@
+{
+  "name": "boston-golang-20261026",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/web"
+  ],
+  "engines": {
+    "node": "^24.15.0 || >=26.0.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others --names api,web \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "node scripts/api.mjs dev",
+    "dev:web": "npm run dev --workspace @boston-golang/web",
+    "build": "npm run build:web && npm run build:api",
+    "build:web": "npm run build --workspace @boston-golang/web",
+    "build:api": "node scripts/api.mjs build",
+    "test": "npm run test:web && npm run test:api",
+    "test:web": "npm run test --workspace @boston-golang/web",
+    "test:api": "node scripts/api.mjs test",
+    "lint": "npm run lint --workspace @boston-golang/web && node scripts/api.mjs lint",
+    "check": "npm run lint && npm test && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}

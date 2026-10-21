@@ -31,3 +31,14 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Monorepo dependencies and build outputs
+node_modules/
+dist/
+bin/
+*.tsbuildinfo
+.env.*
+!.env.example
+coverage/
+*.log
+.DS_Store
