@@ -113,3 +113,41 @@ Official references checked for this implementation:
 - [Watermill router](https://watermill.io/docs/messages-router/)
 
 Watermill offers common interfaces across transports, not identical delivery guarantees. Speaker notes call out redelivery and idempotent handlers; the deck does not promise exactly-once processing.
+
+## Live Watermill + SSE chat demo
+
+Run `npm ci` and `npm run dev`, then open the Vite URL and navigate to the two new chat slides, or visit `/demo` directly. No broker, account, or external service is needed. This is a local teaching demo, not a publicly deployed chat service.
+
+### Presenter runbook (about two minutes)
+
+1. Explain the split: HTTP POST sends; browser `EventSource` receives one-way SSE.
+2. Open **Launch live demo**. Wait for Alice and Bob to be connected. They are two independent real HTTP streams, not simulated clients.
+3. Send from Alice. Compare the same message ID in the publish/fanout display and both chat panes. One publication becomes two independent subscriber queue entries.
+4. Disconnect Bob. Send another message from Alice: Alice still receives it. Reconnect Bob: the missed message does **not** reappear because this is live-only pub/sub.
+5. Open another demo tab to add two more actual subscribers. Server totals include all tabs; browser receipt indicators are local to the current tab.
+6. Return to the deck with the demo's back link.
+
+### What is actually running
+
+`POST /api/chat/messages` validates `{ "name": "Alice", "text": "Hello" }`, publishes one JSON Watermill message to `chat.messages`, and returns 202 with its ID. `GET /api/chat/events` makes a new GoChannel subscription for each SSE connection. Each bridge queues the message, acknowledges Watermill, and streams `event: chat`. The initial `event: ready` confirms subscription registration. `GET /api/chat/stats` exposes active subscribers, successful publications, queued copies, and slow-client disconnections.
+
+The slides extract their Go snippets from `apps/api/internal/server/chat.go` during the frontend build, rather than maintaining pretend copies. The backend uses Watermill v1.5.3 with Fiber v3.6.1. Read the implementation and its socket-level tests in that directory.
+
+### Important limits and semantics
+
+- Single process, in-memory GoChannel; no durable storage, missed-message replay, or exactly-once delivery. Restart loses all state. A publication with no subscribers is discarded. Switching to a broker requires a delivery design, not just changing a constructor.
+- One actively admitted publication at a time; concurrent requests may receive 429 and can be retried manually. Blocking until queue-boundary acknowledgements prevents GoChannel from accumulating unlimited pending delivery goroutines.
+- At most 16 active stream bridges, 32 queued messages per bridge, 4 KiB request bodies, 40-character names and 500-character messages. The browser displays only the last 50 messages.
+- A slow full queue is disconnected, not negatively acknowledged into an immediate retry loop. Acknowledgement means **queued for SSE**, not delivered to or read by the browser. The UI distinguishes server queue counts from observed browser arrivals.
+- SSE heartbeat every two seconds detects broken sockets on write; detection is not instantaneous. Per-flush five-second write deadlines bound slow socket writes. Shutdown cancels all subscriptions before closing the server. EventSource reconnects automatically but does not recover missed events.
+- No authentication, room authorization, persistence, multi-instance coordination, or production rate limiting. Bind locally (the default); do not expose this teaching API to an untrusted network.
+
+### Verification and primary sources
+
+`npm run check` includes frontend behavior tests, Go race tests, builds, and real TCP/HTTP tests that open two SSE streams, publish once, compare IDs, close streams, verify cleanup, and confirm no historical replay. Hub tests additionally exercise slow queues, connection limits, concurrent subscriptions/publications, and shutdown.
+
+- [Watermill GoChannel semantics](https://watermill.io/pubsubs/gochannel/)
+- [Watermill v1.5.3 GoChannel source](https://github.com/ThreeDotsLabs/watermill/blob/v1.5.3/pubsub/gochannel/pubsub.go)
+- [Fiber streaming API](https://docs.gofiber.io/next/api/ctx/#sendstreamwriter)
+- [Fiber v3.6.1 context source](https://github.com/gofiber/fiber/blob/v3.6.1/ctx.go)
+- [MDN: server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)

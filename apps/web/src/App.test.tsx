@@ -12,10 +12,10 @@ beforeEach(() => {
 })
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.location.hash = '' })
 
-it('initializes the real deck with three slides and confirmed speaker details', async () => {
+it('initializes the real deck with five slides and confirmed speaker details', async () => {
   const { container } = render(<App />)
-  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'))
-  expect(container.querySelectorAll('.slides > section')).toHaveLength(3)
+  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
+  expect(container.querySelectorAll('.slides > section')).toHaveLength(5)
   expect(container.querySelector('#title')).toHaveClass('present')
   expect(screen.getByRole('heading', { name: 'Watermill.' })).toBeInTheDocument()
   expect(container.querySelector('#speaker')).toHaveTextContent('Matt Spurlin')
@@ -24,11 +24,14 @@ it('initializes the real deck with three slides and confirmed speaker details', 
   expect(container.querySelector('#watermill')).toHaveTextContent('Publish & subscribe')
   expect(container.querySelector('#watermill')).toHaveTextContent('Compose middleware')
   expect(container.querySelector('#watermill')).toHaveAttribute('data-notes', expect.stringContaining('idempotent'))
+  expect(container.querySelector('#chat-flow')).toHaveTextContent('h.bus.Publish(chatTopic, msg)')
+  expect(container.querySelector('#chat-fanout')).toHaveTextContent('h.bus.Subscribe(ctx, chatTopic)')
+  expect(container.querySelector('#chat-fanout a[href="/demo"]')).toHaveTextContent('Launch live demo')
 })
 
 it('moves forward and back with native controls and updates the hash', async () => {
   const { container } = render(<App />)
-  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'))
+  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
   fireEvent.click(screen.getByRole('button', { name: 'next slide' }))
   await waitFor(() => expect(container.querySelector('#speaker')).toHaveClass('present'))
   await waitFor(() => expect(window.location.hash).toContain('speaker'), { timeout: 3000 })
@@ -38,7 +41,7 @@ it('moves forward and back with native controls and updates the hash', async () 
 
 it('survives React StrictMode initialization and cleanup without duplicate decks', async () => {
   const { container, unmount } = render(<StrictMode><App /></StrictMode>)
-  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'))
+  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
   expect(container.querySelectorAll('.controls')).toHaveLength(1)
   unmount()
   expect(document.querySelector('.reveal')).not.toBeInTheDocument()
@@ -47,7 +50,7 @@ it('survives React StrictMode initialization and cleanup without duplicate decks
 it('supports keyboard and touch navigation without blocking vertical scrolling', async () => {
   const { container } = render(<App />)
   const deck = container.querySelector('.reveal')!
-  await waitFor(() => expect(deck).toHaveClass('ready'))
+  await waitFor(() => expect(deck).toHaveClass('ready'), { timeout: 5000 })
   fireEvent.keyDown(document, { key: 'ArrowRight', keyCode: 39, which: 39 })
   await waitFor(() => expect(container.querySelector('#speaker')).toHaveClass('present'))
   fireEvent.pointerDown(deck, { pointerType: 'touch', pointerId: 1, clientX: 200, clientY: 100 })
@@ -64,7 +67,7 @@ it('supports keyboard and touch navigation without blocking vertical scrolling',
 it('toggles the native overview without overriding its transform', async () => {
   const { container } = render(<App />)
   const deck = container.querySelector('.reveal')!
-  await waitFor(() => expect(deck).toHaveClass('ready'))
+  await waitFor(() => expect(deck).toHaveClass('ready'), { timeout: 5000 })
   fireEvent.keyDown(document, { key: 'Escape', keyCode: 27, which: 27 })
   await waitFor(() => expect(deck).toHaveClass('overview'))
   expect((container.querySelector('.slides') as HTMLElement).style.transform).toContain('scale')

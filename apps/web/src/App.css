@@ -35,3 +35,13 @@
 @media (prefers-reduced-motion: reduce) { .watermill-deck .slides section { transition: none !important; } }
 
 .watermill-deck .controls button:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+
+.watermill-deck .chat-slide h2 { font-size: clamp(32px, 4.5vw, 64px); }
+.watermill-deck .chat-architecture { display: flex; gap: 12px; margin: 26px 0; flex-wrap: wrap; }
+.watermill-deck .chat-architecture span { padding: 14px 18px; background: #253d30; border: 1px solid var(--line); border-radius: 8px; font-size: clamp(14px, 1.5vw, 21px); }
+.watermill-deck .chat-explanation { display: grid; grid-template-columns: 1fr 1.2fr; gap: 32px; margin: 26px 0; align-items: center; }
+.watermill-deck .chat-explanation p { font-size: clamp(16px, 1.7vw, 23px); line-height: 1.5; color: var(--muted); }
+.watermill-deck .chat-explanation pre { background: #09120e; border: 1px solid var(--line); border-radius: 12px; padding: 20px; overflow: auto; font: clamp(12px, 1.1vw, 17px)/1.65 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.watermill-deck .chat-explanation .chat-caveat { font-size: clamp(13px, 1.2vw, 17px); margin: 20px 0; }
+.watermill-deck .demo-button { display: inline-block; background: var(--accent); color: #14251b; padding: 14px 20px; border-radius: 8px; font-weight: 650; }
+@media (max-width: 700px) { .watermill-deck .chat-explanation { grid-template-columns: 1fr; gap: 18px; }.watermill-deck .chat-architecture { margin: 18px 0; } }

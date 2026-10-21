@@ -3,6 +3,11 @@ import type { DeckProps } from '@revealjs/react'
 import RevealNotes from 'reveal.js/plugin/notes'
 import 'reveal.js/reveal.css'
 import './App.css'
+import chatSource from '../../api/internal/server/chat.go?raw'
+
+function sourceExcerpt(name: string) {
+  return chatSource.split(`// demo:${name}:start`)[1].split(`// demo:${name}:end`)[0].trim()
+}
 
 const config: DeckProps['config'] = {
   width: '100%', height: '100%', margin: 0, disableLayout: true,
@@ -54,6 +59,25 @@ export default function App() {
             <div className="transport-line"><span>CHOOSE YOUR TRANSPORT</span><p>Kafka <b>·</b> RabbitMQ <b>·</b> PostgreSQL <b>·</b> and more</p></div>
           </div>
           <div className="slide-footer"><a href="https://watermill.io/learn/getting-started/" target="_blank" rel="noreferrer">watermill.io / getting started ↗</a><span>ONE API. DIFFERENT TRANSPORTS.</span></div>
+        </div>
+      </Slide>
+      <Slide id="chat-flow" notes="A browser sends messages with HTTP POST. Server-Sent Events are a separate, one-way server-to-browser response held open by EventSource. This is not WebSockets or bidirectional SSE. The POST handler validates input and publishes one Watermill message. The code below is extracted directly from the running API source. Open the demo, send from Alice, and compare the same message ID in both panes.">
+        <div className="slide-content chat-slide">
+          <SlideHeader section="03 / A REAL-TIME CHAT ROOM" />
+          <div className="intro-body"><p className="eyebrow">TWO DIRECTIONS. TWO SIMPLE TOOLS.</p><h2>POST to speak.<br /><span className="accent">SSE to listen.</span></h2>
+            <div className="chat-architecture"><span>Browser → HTTP POST</span><span>Fiber → Watermill topic</span><span>SSE → every connected browser</span></div>
+            <div className="chat-explanation"><p>HTTP accepts the message once. EventSource keeps a receive-only connection open. Watermill separates publishing from live delivery.</p><pre aria-label="Actual Go publish implementation"><code>{sourceExcerpt('publish')}</code></pre></div>
+          </div>
+          <div className="slide-footer"><span>ACTUAL SOURCE: apps/api/internal/server/chat.go</span><a href="/demo">Open the live chat demo ↗</a></div>
+        </div>
+      </Slide>
+      <Slide id="chat-fanout" notes="Each EventSource connection has its own Watermill subscription. Sharing one Go channel between browsers would distribute messages instead of broadcasting. GoChannel is in-process and live-only: no durable broker, no missed-message replay, and no exactly-once guarantee. We bound connections and queues, admit one publisher at a time, Ack at the SSE queue boundary, and disconnect slow consumers. Ack does not prove browser delivery. Demo: send once; see Alice and Bob receive the same ID. Disconnect Bob, send again, then reconnect Bob: the missed message stays missing. Open a second tab to prove these are actual server connections.">
+        <div className="slide-content chat-slide">
+          <SlideHeader section="04 / WHERE WATERMILL HELPS" />
+          <div className="intro-body"><p className="eyebrow">ONE PUBLICATION. INDEPENDENT SUBSCRIBERS.</p><h2>Publish once.<br /><span className="accent">Fan out to the room.</span></h2>
+            <div className="chat-explanation"><pre aria-label="Actual Watermill configuration"><code>{sourceExcerpt('bus') + '\n\n' + sourceExcerpt('subscribe')}</code></pre><div><h3>Watch the boundary</h3><p>Send a message. Match its ID in Alice and Bob. Disconnect Bob and send again: Alice keeps receiving.</p><p className="chat-caveat">Local GoChannel demo: bounded queues, live only, no replay. An Ack means queued for SSE, not read by a browser. Production needs explicit durability and delivery design.</p><a className="demo-button" href="/demo">Launch live demo →</a></div></div>
+          </div>
+          <div className="slide-footer"><a href="https://watermill.io/pubsubs/gochannel/" target="_blank" rel="noreferrer">WATERMILL / GOCHANNEL ↗</a><span>NO BROKER REQUIRED FOR THIS DEMO.</span></div>
         </div>
       </Slide>
     </Deck>
