@@ -3,12 +3,64 @@ import type { DeckProps } from '@revealjs/react'
 import RevealNotes from 'reveal.js/plugin/notes'
 import 'reveal.js/reveal.css'
 import './App.css'
-import AutoChatSlide from './AutoChatSlide'
-import chatSource from '../../api/internal/server/chat.go?raw'
+import ReportSlide from './ReportSlide'
+import type { ReportStory } from './ReportSlide'
+import reportSource from '../../api/internal/server/reports.go?raw'
 
 function sourceExcerpt(name: string) {
-  return chatSource.split(`// demo:${name}:start`)[1].split(`// demo:${name}:end`)[0].trim()
+  const excerpt = reportSource.split(`// demo:${name}:start`)[1]?.split(`// demo:${name}:end`)[0]
+  if (!excerpt) throw new Error(`Missing report source excerpt: ${name}`)
+  const lines = excerpt.replace(/^\s*\n/, '').trimEnd().split('\n')
+  const indent = Math.min(...lines.filter(line => line.trim()).map(line => line.match(/^\s*/)?.[0].length ?? 0))
+  const source = lines.map(line => line.slice(indent)).join('\n')
+  if (name !== 'durable') return source
+  // Keep the real lifecycle calls, with omissions made explicit instead of showing
+  // 30 lines of repeated error checks on a presentation slide.
+  return source
+    .replace(/if err := pub\.Close\(\); err != nil \{[\s\S]*?\n\}/, 'if err := pub.Close(); err != nil { /* … */ }')
+    .replace(/if err := db\.Close\(\); err != nil \{[\s\S]*?\n\}/, 'if err := db.Close(); err != nil { /* … */ }')
+    .replace(/r\.event\("db-closed"[\s\S]*?(?=db, err = openReportDB)/, '// … brief pause with every connection closed …\n')
+    .replace(/if err != nil \{\n\treturn err\n\}/g, '// … error handling omitted …')
 }
+
+const reportStories: (ReportStory & { notes: string })[] = [
+  {
+    mode: 'publish', step: '03 / MOVE WORK OUT OF THE REQUEST',
+    title: 'Accept the request.', accent: 'Do the work later.',
+    explanation: 'A tiny CSV report is enough to see the boundary: HTTP accepts a job, then a subscriber generates the file.',
+    concept: 'Publish a message. Return control to the caller. Let a worker finish the report.',
+    boundary: 'GoChannel is in-memory. This first demo is not a durable job queue. The browser polls job state; Watermill carries the work.',
+    source: sourceExcerpt('publish'),
+    notes: 'The first three opening slides are unchanged. This four-part story builds one small synthetic CSV report. Entering this slide makes an actual HTTP POST to the Go API and starts one finite run. Watch Queued become Processing, then Ready. The message ID and events are server facts, not animation timers. The source excerpt comes from reports.go at build time. This first slide uses a plain subscriber and an explicit Ack. GoChannel is in-memory, not durable. A successful publish is not proof that the report has finished. Browser polling is only the observation path, not the lesson. Leaving, opening overview, Replay, and unmount all clean up. Start both apps using npm run dev.',
+  },
+  {
+    mode: 'router', step: '04 / HANDLE THE MESSAGE',
+    title: 'Give the work', accent: 'a handler.',
+    explanation: 'The Router wires a subscription to application code. Your handler reports success or failure.',
+    concept: 'Return nil → the Router acknowledges. Return an error → the Router negatively acknowledges.',
+    boundary: 'Ack means this handler succeeded, not “exactly once.” Transport and configuration determine redelivery. Keep real handlers idempotent.',
+    source: sourceExcerpt('router'),
+    notes: 'Same report, now a Watermill Router handler. Read the small handler and explain the nil/error contract: returning nil acknowledges; returning an error negatively acknowledges. This automatic run follows the successful path. The next slide deliberately injects errors. Router wiring removes manual Ack/Nack from application code. Delivery semantics remain transport-dependent, so production handlers need idempotency. Source: https://watermill.io/docs/messages-router/.',
+  },
+  {
+    mode: 'retry', step: '05 / RETRY A TRANSIENT FAILURE',
+    title: 'Fail twice.', accent: 'Finish on attempt three.',
+    explanation: 'A deliberately flaky generator makes Retry visible. One published message, three calls to the same handler.',
+    concept: 'Retry wraps the handler. Two temporary errors, short backoffs, then a successful CSV.',
+    boundary: 'These are middleware attempts, not three publications or proof of broker redelivery. Exhausted retries return an error to the Router.',
+    source: sourceExcerpt('retry'),
+    notes: 'No typing is needed. The actual generator fails on attempts one and two, then succeeds on attempt three. Point to the stable message ID and the real server event timeline. Watermill Retry middleware re-invokes the handler within this delivery; do not describe it as publishing three messages or three transport redeliveries. MaxRetries two means three total handler calls. Retry backoff is finite. If every retry fails, the resulting error goes to the Router, whose Nack behavior depends on the transport. Source: https://watermill.io/docs/middlewares/.',
+  },
+  {
+    mode: 'durable', step: '06 / KEEP WORK WHILE THE WORKER IS OFFLINE',
+    title: 'Worker offline.', accent: 'Message preserved.',
+    explanation: 'Publish to a real SQLite file with no worker. Close the database, reopen it, then start a subscriber.',
+    concept: 'Watch Queued survive closing every connection. Start the first worker, then generate the CSV.',
+    boundary: 'Official Watermill SQLite transport (beta). Messages survive closing and reopening database connections before a worker starts. Not a process-crash or exactly-once guarantee.',
+    source: sourceExcerpt('durable'),
+    notes: 'This is an actual disk-backed SQLite demonstration, not a slice retained in Go memory. The server publishes with the worker offline, closes the publisher and database connection, waits briefly, opens the same database file, and starts a new worker. The run stays Queued until that subscriber processes the message. The official Watermill SQLite transport is beta. This controlled connection restart before the first subscriber starts is not a process crash, power-loss test, or exactly-once claim. Job status is demo memory, while the queued message is in SQLite. Each run is isolated, finite, and deleted on cleanup, with server expiry as a fallback. In production choose a transport based on explicit persistence, delivery, throughput, and operations requirements.',
+  },
+]
 
 const config: DeckProps['config'] = {
   width: '100%', height: '100%', margin: 0, disableLayout: true,
@@ -62,28 +114,9 @@ export default function App() {
           <div className="slide-footer"><a href="https://watermill.io/learn/getting-started/" target="_blank" rel="noreferrer">watermill.io / getting started ↗</a><span>ONE API. DIFFERENT TRANSPORTS.</span></div>
         </div>
       </Slide>
-      <Slide id="chat-flow" notes="A browser sends messages with HTTP POST. Server-Sent Events are a separate, one-way server-to-browser response held open by EventSource. This is not WebSockets or bidirectional SSE. The POST handler validates input and publishes one Watermill message. The code below is extracted directly from the running API source. Open the demo, send from Alice, and compare the same message ID in both panes.">
-        <div className="slide-content chat-slide">
-          <SlideHeader section="03 / A REAL-TIME CHAT ROOM" />
-          <div className="intro-body"><p className="eyebrow">TWO DIRECTIONS. TWO SIMPLE TOOLS.</p><h2>POST to speak.<br /><span className="accent">SSE to listen.</span></h2>
-            <div className="chat-architecture"><span>Browser → HTTP POST</span><span>Fiber → Watermill topic</span><span>SSE → every connected browser</span></div>
-            <div className="chat-explanation"><p>HTTP accepts the message once. EventSource keeps a receive-only connection open. Watermill separates publishing from live delivery.</p><pre aria-label="Actual Go publish implementation"><code>{sourceExcerpt('publish')}</code></pre></div>
-          </div>
-          <div className="slide-footer"><span>ACTUAL SOURCE: apps/api/internal/server/chat.go</span><span>LIVE DEMO ON SLIDE 6 →</span></div>
-        </div>
-      </Slide>
-      <Slide id="chat-fanout" notes="Each EventSource connection has its own Watermill subscription. Sharing one Go channel between browsers would distribute messages instead of broadcasting. GoChannel is in-process and live-only: no durable broker, no missed-message replay, and no exactly-once guarantee. We bound connections and queues, admit one publisher at a time, Ack at the SSE queue boundary, and disconnect slow consumers. Ack does not prove browser delivery. Demo: send once; see Alice and Bob receive the same ID. Disconnect Bob, send again, then reconnect Bob: the missed message stays missing. Open a second tab to prove these are actual server connections.">
-        <div className="slide-content chat-slide">
-          <SlideHeader section="04 / WHERE WATERMILL HELPS" />
-          <div className="intro-body"><p className="eyebrow">ONE PUBLICATION. INDEPENDENT SUBSCRIBERS.</p><h2>Publish once.<br /><span className="accent">Fan out to the room.</span></h2>
-            <div className="chat-explanation"><pre aria-label="Actual Watermill configuration"><code>{sourceExcerpt('bus') + '\n\n' + sourceExcerpt('subscribe')}</code></pre><div><h3>Watch the boundary</h3><p>Send a message. Match its ID in Alice and Bob. Disconnect Bob and send again: Alice keeps receiving.</p><p className="chat-caveat">Local GoChannel demo: bounded queues, live only, no replay. An Ack means queued for SSE, not read by a browser. Production needs explicit durability and delivery design.</p><p className="demo-button">Next slide: watch it happen →</p></div></div>
-          </div>
-          <div className="slide-footer"><a href="https://watermill.io/pubsubs/gochannel/" target="_blank" rel="noreferrer">WATERMILL / GOCHANNEL ↗</a><span>NO BROKER REQUIRED FOR THIS DEMO.</span></div>
-        </div>
-      </Slide>
-      <Slide id="chat-demo" notes="No clicks needed: entering starts a finite real-network scenario. Alice and Bob connect, exchange messages, Bob disconnects, Alice receives alone, then Bob reconnects without replay and both receive a new message. Leaving or opening overview stops timers and streams; returning replays from the start. API must be running. Errors stop rather than loop.">
-        <div className="slide-content automated-demo-slide"><SlideHeader section="05 / WATCH IT HAPPEN" /><AutoChatSlide /></div>
-      </Slide>
+      {reportStories.map(story => <Slide key={story.mode} id={`report-${story.mode}`} notes={story.notes}>
+        <div className="slide-content report-slide"><SlideHeader section={story.step} /><ReportSlide story={story} /><div className="slide-footer"><span>SOURCE: apps/api/internal/server/reports.go</span><span>MOVE WORK → HANDLE IT → RETRY IT → PRESERVE IT</span></div></div>
+      </Slide>)}
     </Deck>
   )
 }

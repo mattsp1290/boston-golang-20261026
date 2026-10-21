@@ -34,6 +34,6 @@ func New() *fiber.App {
 	app.Get("/api/message", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"message": "Hello from Go + Fiber!", "topic": "A talk on Watermill"})
 	})
-	newChatHub().routes(app)
+	newReportHub().routes(app)
 	return app
 }

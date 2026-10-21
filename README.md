@@ -1,171 +1,90 @@
 # Boston Golang · October 26, 2026
 
-A talk on Watermill. This monorepo contains a three-slide React presentation and a Go/Fiber JSON API. The presentation introduces the library; Watermill itself is not wired into the API yet.
+A seven-slide Watermill talk by Matt Spurlin, Senior Software Engineer at Datadog. React + the official reveal.js React integration renders the slides; Go/Fiber runs real background report workers.
 
-## Requirements
+## Run the talk
 
-- Node.js 24.15+ within the 24 LTS line recommended (`.nvmrc`), or Node 26+. The test dependencies require this newer baseline.
-- npm 10+.
-- Go 1.26+ (required by Fiber v3). Tests use Go's race detector, so a C compiler is required on supported platforms.
-
-## Start developing
-
-```sh
-npm ci
-# Optional: cp .env.example .env
-npm run dev
-```
-
-Open http://127.0.0.1:5173 for the presentation. The deck is self-contained and does not need the API; `npm run dev:web` is sufficient for presenting. The original JSON API remains at http://127.0.0.1:3000, with Vite proxying `/api/*` during development. No CORS configuration is needed for this same-origin development flow.
-
-React changes hot-reload. The API is compiled on startup; restart `npm run dev` after Go changes. Ctrl-C stops both servers. Either server failing also stops the other. Both bind to loopback by default.
-
-To run them separately:
-
-```sh
-npm run dev:api
-npm run dev:web
-```
-
-The optional root `.env` controls `API_ADDR` and `API_PROXY_TARGET`. Change both together when moving the API port. Shell environment variables take precedence. `API_PROXY_TARGET` is server-side configuration, not a browser secret. Never put secrets in `VITE_*` variables.
-
-## Commands
-
-Run from the repository root:
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the API and Vite together |
-| `npm run build` | Type-check and bundle React, compile Go |
-| `npm test` | Frontend tests and Go tests with race detector |
-| `npm run lint` | Oxlint, TypeScript, gofmt check, and go vet |
-| `npm run check` | Lint, tests, and production builds |
-| `npm run build:web` / `npm run build:api` | Build one application |
-| `npm run test:web` / `npm run test:api` | Test one application |
-
-Go-only commands work from `apps/api`, for example `go test -race ./...`. Format Go with `gofmt -w apps/api` from the root. The npm workspace lockfile and Go module sums are committed for reproducible dependency installation.
-
-## Layout
-
-```text
-apps/
-  api/
-    cmd/server/          # Entrypoint, environment, graceful shutdown
-    internal/server/     # Fiber application, routes, HTTP tests
-    go.mod / go.sum
-  web/
-    src/                 # React slides, theme, typed API client, tests
-    vite.config.ts       # Local /api proxy
-scripts/api.mjs          # Cross-platform Go build/test/lint/dev commands
-.env.example
-package.json / package-lock.json
-```
-
-## API
-
-- `GET /api/health` → `{"status":"ok","service":"boston-golang-api"}`. Liveness only; no dependencies are checked.
-- `GET /api/message` → `{"message":"Hello from Go + Fiber!","topic":"A talk on Watermill"}`.
-- Unknown routes return a JSON error with HTTP 404.
-
-Smoke-test the running development stack:
-
-```sh
-curl --fail http://127.0.0.1:3000/api/health
-curl --fail http://127.0.0.1:5173/api/message
-```
-
-## Production outputs
-
-`npm run build` creates `apps/web/dist/` and `bin/api` (`bin/api.exe` on Windows). Run the API with `API_ADDR=127.0.0.1:3000 ./bin/api`. Serve `apps/web/dist/` with a static web server and route `/api/*` to the Go process on the same origin. Vite's development proxy is not part of the production bundle, and `vite preview` is not a production server. Configure an appropriate bind address, TLS/reverse proxy, and process supervisor for the deployment environment.
-
-No database, auth system, container platform, or deployment provider is assumed.
-
-## Upstream references
-
-- [React](https://react.dev/)
-- [Vite guide](https://vite.dev/guide/)
-- [Fiber v3 documentation](https://docs.gofiber.io/)
-- [Go downloads](https://go.dev/dl/)
-
-## Presenting
-
-The three opening slides are:
-
-1. **Watermill**: message-driven applications, the Go way.
-2. **Who I am**: Matt Spurlin, Senior Software Engineer at Datadog, [mattsp1290](https://github.com/mattsp1290).
-3. **What is Watermill?**: publishing/subscribing, routing to handlers, middleware, and transport choices.
-
-Use the arrow keys, Space, on-screen arrows, or horizontal touch swipes to navigate. The progress bar and slide counter show your place. URLs include stable slide hashes (`#/title`, `#/speaker`, `#/watermill`) so slides can be linked directly. Press **S** for the native speaker view with per-slide notes, **Esc** for the overview, and **F** for fullscreen. A browser popup permission may be needed for speaker view. On narrow screens, content reflows and longer slides can scroll vertically. Reduced-motion preferences disable slide transitions.
-
-Edit slide content and speaker notes in `apps/web/src/App.tsx`; the presentation theme is `apps/web/src/App.css`. The speaker details were supplied by the presenter. This is not a statement of Datadog endorsement. This is a web presentation, not a generated PowerPoint `.pptx` file.
-
-### Library choice and sources
-
-We use the official **@revealjs/react 0.2.2** wrapper with **reveal.js 6.0.2**, pinned exactly in the web package and lockfile. It supports the existing React 19 app, React-authored slides, lifecycle cleanup, keyboard/touch navigation, progress, speaker notes, and presenter view without building those features ourselves. The wrapper is a newer 0.x package, so versions are pinned and real deck initialization/navigation/StrictMode cleanup are tested. Spectacle was considered, but its then-current react-spring dependency advertised React peer ranges that did not include this app's React 19 version.
-
-Official references checked for this implementation:
-
-- [React integration and lifecycle](https://revealjs.com/react/)
-- [Reveal speaker view](https://revealjs.com/speaker-view/)
-- [Reveal configuration](https://revealjs.com/config/)
-- [Watermill introduction](https://watermill.io/learn/getting-started/)
-- [Publisher/subscriber semantics](https://watermill.io/docs/pub-sub/)
-- [Watermill router](https://watermill.io/docs/messages-router/)
-
-Watermill offers common interfaces across transports, not identical delivery guarantees. Speaker notes call out redelivery and idempotent handlers; the deck does not promise exactly-once processing.
-
-## Live Watermill + SSE chat demo
-
-Run `npm ci` and `npm run dev`, then open the Vite URL and navigate to slides 4–6. Slide 6 is the live demo and starts automatically; `/demo` remains available for manual exploration. No broker, account, or external service is needed. This is a local teaching demo, not a publicly deployed chat service.
-
-### Presenter runbook (hands-free, about 25 seconds)
-
-1. Explain slides 4 and 5: HTTP POST sends; browser EventSource receives; Watermill provides independent fanout.
-2. Advance to slide 6. No clicking or typing is needed. It waits for both actual server subscriptions, then Alice and Bob each publish a message.
-3. Watch Bob disconnect, Alice receive alone, and Bob reconnect. A final message reaches both, but Bob's missed message never appears. Message IDs and receipt badges come from real SSE events, not simulated timers.
-4. The finite scenario stops and closes both streams. Leave and return to replay from a fresh state. Leaving early, unmounting, or opening the slide overview cancels in-flight requests, timers, and streams.
-5. If the API is unavailable or a delivery times out, the slide shows a stopped/error message instead of pretending success or retrying forever. Start the API, then leave and return to retry.
-
-The separate `/demo` route still supports manual chat exploration. Other open demo tabs share the same local topic; close them for a distraction-free presentation. No server reset or destructive operation is needed for replay.
-
-### What is actually running
-
-`POST /api/chat/messages` validates `{ "name": "Alice", "text": "Hello" }`, publishes one JSON Watermill message to `chat.messages`, and returns 202 with its ID. `GET /api/chat/events` makes a new GoChannel subscription for each SSE connection. Each bridge queues the message, acknowledges Watermill, and streams `event: chat`. The initial `event: ready` confirms subscription registration. `GET /api/chat/stats` exposes active subscribers, successful publications, queued copies, and slow-client disconnections.
-
-The slides extract their Go snippets from `apps/api/internal/server/chat.go` during the frontend build, rather than maintaining pretend copies. The backend uses Watermill v1.5.3 with Fiber v3.6.1. Read the implementation and its socket-level tests in that directory.
-
-### Important limits and semantics
-
-- Single process, in-memory GoChannel; no durable storage, missed-message replay, or exactly-once delivery. Restart loses all state. A publication with no subscribers is discarded. Switching to a broker requires a delivery design, not just changing a constructor.
-- One actively admitted publication at a time; concurrent requests may receive 429 and can be retried manually. Blocking until queue-boundary acknowledgements prevents GoChannel from accumulating unlimited pending delivery goroutines.
-- At most 16 active stream bridges, 32 queued messages per bridge, 4 KiB request bodies, 40-character names and 500-character messages. The browser displays only the last 50 messages.
-- A slow full queue is disconnected, not negatively acknowledged into an immediate retry loop. Acknowledgement means **queued for SSE**, not delivered to or read by the browser. The UI distinguishes server queue counts from observed browser arrivals.
-- SSE heartbeat every two seconds detects broken sockets on write; detection is not instantaneous. Per-flush five-second write deadlines bound slow socket writes. Shutdown cancels all subscriptions before closing the server. EventSource reconnects automatically but does not recover missed events.
-- No authentication, room authorization, persistence, multi-instance coordination, or production rate limiting. Bind locally (the default); do not expose this teaching API to an untrusted network.
-
-### Verification and primary sources
-
-`npm run check` includes frontend behavior tests, Go race tests, builds, and real TCP/HTTP tests that open two SSE streams, publish once, compare IDs, close streams, verify cleanup, and confirm no historical replay. Hub tests additionally exercise slow queues, connection limits, concurrent subscriptions/publications, and shutdown.
-
-- [Watermill GoChannel semantics](https://watermill.io/pubsubs/gochannel/)
-- [Watermill v1.5.3 GoChannel source](https://github.com/ThreeDotsLabs/watermill/blob/v1.5.3/pubsub/gochannel/pubsub.go)
-- [Fiber streaming API](https://docs.gofiber.io/next/api/ctx/#sendstreamwriter)
-- [Fiber v3.6.1 context source](https://github.com/gofiber/fiber/blob/v3.6.1/ctx.go)
-- [MDN: server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events)
-
-## Build and run both applications
-
-From the repository root:
+Requirements: Node.js 24.15+ (24.x recommended) or 26+, npm 10+, Go 1.26+. Go race tests also require a C compiler. SQLite itself uses the pure-Go modernc driver: no database server, Docker, CGO, email provider, or account setup is required for the demos.
 
 ```sh
 ./scripts/build.sh
 ./scripts/run.sh
 ```
 
-Both scripts also work from another working directory when invoked by their full path. They require Bash, Node.js 24.15+ on the 24.x line or Node.js 26+, and npm 10+. Building additionally requires Go 1.26+. `build.sh` performs a clean lockfile install with `npm ci`, then builds both the React/TypeScript frontend into `apps/web/dist` and the Go API into `bin/api`. It stops immediately on an install or build failure.
+Open http://127.0.0.1:5173. Both applications must be running for the four live slides. The first three introduction slides work offline. Arrow keys/swipe navigate, Escape toggles overview, S opens speaker notes. Ctrl-C stops both servers. Run from any working directory; scripts locate the repository themselves.
 
-`run.sh` runs those existing build outputs without rebuilding: the API and Vite preview start together, and either process exiting stops its sibling. Ctrl-C or SIGTERM stops both. Run `build.sh` again after changing source. The script reports a missing build before starting either process.
+Development:
 
-Open http://127.0.0.1:5173 and advance to slide 6 for the automatic demo. The frontend origin proxies `/api` to the Go API (default http://127.0.0.1:3000), including SSE streams. The preview uses a strict port rather than silently selecting another one. This is a **local presentation preview, not production hosting**; it does not introduce Python.
+```sh
+npm ci
+npm run dev
+```
 
-An optional repository-root `.env` is loaded for both processes; existing shell variables take precedence. To change the API port, set both `API_ADDR` (for example `127.0.0.1:3300`) and `API_PROXY_TARGET` (`http://127.0.0.1:3300`) in `.env` or the environment. Do not expose the unauthenticated demo API to an untrusted network. The separate `npm run dev` command remains available for development with frontend hot reload.
+React hot-reloads. Restart after Go changes. Optional root `.env` (see `.env.example`) controls `API_ADDR` and `API_PROXY_TARGET`; change both together for a different API port. Shell environment variables take precedence. Vite development and preview proxy `/api` to the Go server; both servers bind to loopback by default. These are local presentation tools, not a production deployment.
+
+## The story: generate a report
+
+The title, speaker bio, and Watermill introduction lead into four deliberately small demonstrations:
+
+1. **Move work out of the request.** A real Watermill GoChannel publication delivers one request to a subscriber. The request is handled in the background and explicitly acknowledged. The UI shows Queued → Processing → Ready and a small synthetic CSV.
+2. **Give the worker a handler.** A real Watermill Router invokes the same report function. It owns acknowledgement: successful return means Ack; an error means failure/Nack unless middleware handles it. This slide runs the successful path; the next exercises errors.
+3. **Retry a temporary failure.** The handler fails twice and succeeds on its third invocation. Watermill's actual Retry middleware performs the retries with bounded fixed delays. The message ID stays the same. There is no frontend retry simulation.
+4. **Keep work while the worker is offline.** The official Watermill SQLite adapter publishes to a file with no subscriber. The publisher and every database connection are closed. A new connection pool and Router subscriber open the same file, consuming the original request without publishing again.
+
+Every demo starts automatically when its slide becomes active. It runs once, not continuously; Replay starts a fresh isolated run. Polling only displays server observations. Leaving the slide, opening overview, or unmounting aborts polling and requests backend cancellation. Errors stop the scenario rather than silently restarting it.
+
+### What the durability demo proves (and does not)
+
+It proves real file-backed Watermill messages survive closing all database connections and can be consumed by a newly started worker/subscriber. It does **not** kill/restart the operating-system process, demonstrate recovery from a machine crash, or preserve the UI status registry across API restart. The queued message lives in SQLite, not in a custom imitation queue. The SQLite adapter is officially listed as **beta**.
+
+The first three demos use GoChannel: in-process memory, no crash durability. The final run uses a separate temporary SQLite file. Each run deletes its temporary database only after its resources close. This is intentionally a finite teaching lifecycle, not a persistent production report service.
+
+All four report outputs use deterministic synthetic rows. Replacing a run's CSV avoids accumulating a second artifact during retries, but is **not** a transactional idempotency mechanism or an exactly-once guarantee. Production side effects need durable idempotency keys, transaction/outbox design where appropriate, and explicit transport delivery semantics.
+
+## Implementation map
+
+- `apps/web/src/App.tsx`: seven-slide deck, notes, source excerpts.
+- `apps/web/src/`: report UI, polling and reveal lifecycle tests.
+- `apps/api/internal/server/reports.go`: Watermill publication, Router, Retry, SQLite lifecycle, cancellation and routes. The snippets on slides are extracted from this actual source using `demo:*` markers.
+- `apps/api/internal/server/reports_test.go`: real API/worker integration tests, retries, lifecycle and persistent queue behavior.
+- `scripts/build.sh`, `scripts/run.sh`: build and local preview.
+- `scripts/api.mjs`: cross-platform Go commands.
+
+The previous chat/SSE presentation remains in git history at `e911138`; it is no longer part of this teaching sequence or the running API.
+
+## API and resource bounds
+
+```text
+POST   /api/reports/runs       {"mode":"publish"|"router"|"retry"|"durable"}
+GET    /api/reports/runs/:id
+DELETE /api/reports/runs/:id
+GET    /api/health
+GET    /api/message
+```
+
+POST returns 202 with a run ID, Watermill message ID, status, attempt count and real event timeline. GET returns the current snapshot and CSV when ready. DELETE is idempotent and cancels pending work; deleted/expired reads return 404. Invalid modes or malformed JSON return 400. At most 16 retained runs exist concurrently (503 when full). Each worker is limited to 20 seconds; snapshots expire after 90 seconds, including abandoned requests whose browsers never received a run ID. Each run has its own transport and subscriber. API shutdown cancels active work.
+
+Only expose this unauthenticated demo on your own machine. Do not bind it publicly without authentication, rate limiting and an explicit operational design. Health is liveness only, not a SQLite dependency probe.
+
+## Verify before presenting
+
+```sh
+npm run check          # lint/type checks, all tests (Go race), production builds
+npm run test:web
+npm run test:api
+```
+
+From `apps/api`, `go test -race ./...` runs backend checks. Use `gofmt -w apps/api` after Go edits. Dependency versions are pinned in npm's lockfile and Go module sums.
+
+Manual rehearsal: visit all four live slides, verify the stable message ID, three retry attempts, queued/offline SQLite stage and Ready CSV. Leave during Processing, return, toggle overview, Replay, and stop the API to verify the visible error state. The flow should never invent successful progress if the API fails.
+
+## Official references
+
+- [Watermill getting started](https://watermill.io/learn/getting-started/)
+- [Router](https://watermill.io/docs/messages-router/)
+- [Middleware](https://watermill.io/docs/middlewares/)
+- [GoChannel](https://watermill.io/pubsubs/gochannel/)
+- [SQLite documentation](https://watermill.io/pubsubs/sqlite/)
+- [Official SQLite adapter source](https://github.com/ThreeDotsLabs/watermill-sqlite)
+
+This repository pins `github.com/ThreeDotsLabs/watermill-sqlite/wmsqlitemodernc` v0.1.2. The adapter's Publisher.Close does not close the supplied database handle; the demo explicitly closes both, then checks a newly opened pool with Ping.
