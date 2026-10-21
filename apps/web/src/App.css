@@ -89,3 +89,28 @@
 .watermill-deck .lesson-steps p { font-size: 16px; color: var(--muted); line-height: 1.4; margin-top: 8px; }
 @media (min-width: 1000px) and (max-height: 800px) { .watermill-deck .lesson-slide { padding-bottom: 54px; gap: 16px; }.watermill-deck .lesson-body { gap: 20px; }.watermill-deck .lesson-heading h2 { font-size: 40px; }.watermill-deck .lesson-description { margin-top: 14px; font-size: 18px; }.watermill-deck .lesson-node { padding: 20px; }.watermill-deck .lesson-source { font-size: 12px; padding: 16px; }.watermill-deck .lesson-router, .watermill-deck .lesson-middleware { padding: 20px; }.watermill-deck .lesson-disk { padding: 22px; } }
 @media (max-width: 850px) { .watermill-deck .lesson-diagram { grid-template-columns: minmax(0, 1fr); gap: 10px; }.watermill-deck .lesson-diagram .lesson-arrow { flex-direction: row; justify-content: center; }.watermill-deck .lesson-diagram .lesson-arrow b { transform: rotate(90deg); font-size: 28px; }.watermill-deck .subscriber-bridge { grid-template-columns: 1fr; gap: 24px; }.watermill-deck .lesson-middleware { grid-template-columns: 1fr; gap: 20px; }.watermill-deck .lesson-body { justify-content: flex-start; }.watermill-deck .lesson-outcomes { justify-content: flex-start; font-size: 15px; }.watermill-deck .lesson-wrapper-label { flex-wrap: wrap; }.watermill-deck .lesson-attempts { gap: 10px; }.watermill-deck .lesson-attempts li { padding-left: 10px; }.watermill-deck .lesson-attempts strong { font-size: 17px; }.watermill-deck .lesson-steps { gap: 10px; }.watermill-deck .lesson-steps li { padding: 0; }.watermill-deck .lesson-steps strong { font-size: 19px; }.watermill-deck .lesson-steps p { font-size: 14px; }.watermill-deck .lesson-disk { padding: 30px 20px; }.watermill-deck .lesson-disk p { font-size: 16px; } }
+
+/* The advanced chapter changes transport configuration, not application logic. */
+.watermill-deck .transport-comparison { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 22px; align-items: stretch; }
+.watermill-deck .transport-config { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #14251c; }
+.watermill-deck .transport-config-postgres { border-color: #7b9969; }
+.watermill-deck .transport-config-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.watermill-deck .transport-config-heading h3 { margin: 0; font-size: 23px; }
+.watermill-deck .transport-config .lesson-source { padding: 14px; font-size: clamp(12px, 1vw, 15px); line-height: 1.42; }
+.watermill-deck .transport-handler { margin-top: 26px; border-left: 3px solid var(--accent); padding-left: 17px; display: flex; flex-direction: column; gap: 10px; }
+.watermill-deck .transport-handler strong { font-size: clamp(22px, 2vw, 30px); font-weight: 550; }
+.watermill-deck .transport-handler p { color: var(--muted); font-size: 16px; line-height: 1.4; }
+.watermill-deck .transport-handler code { color: #edf5ef; }
+.watermill-deck .transport-source-note { color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 10px; overflow-wrap: anywhere; }
+@media (min-width: 1000px) and (max-height: 800px) {
+  .watermill-deck #lesson-durable .lesson-body { gap: 15px; }
+  .watermill-deck .transport-config { padding: 15px; }
+  .watermill-deck .transport-config-heading { margin-bottom: 10px; }
+  .watermill-deck .transport-config .lesson-source { font-size: 12px; line-height: 1.35; padding: 12px; }
+  .watermill-deck .transport-handler { margin-top: 20px; }
+}
+@media (max-width: 850px) {
+  .watermill-deck .transport-comparison { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .watermill-deck .transport-config { padding: 16px; }
+  .watermill-deck .transport-config-heading h3 { margin: 0; }
+}

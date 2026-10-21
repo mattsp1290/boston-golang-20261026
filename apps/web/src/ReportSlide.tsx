@@ -18,10 +18,10 @@ export type ReportStory = {
 }
 
 function keySourceLine(line: string) {
-  return /\.Publish\(|\.Subscribe\(|<-incoming|\.Ack\(|\.Nack\(|AddConsumerHandler|AddNoPublisherHandler|middleware\.Retry|MaxRetries:|pub\.Close|db\.Close|openReportDB|NewSubscriber|return nil/.test(line)
+  return /\.Publish\(|\.Subscribe\(|<-incoming|\.Ack\(|\.Nack\(|AddConsumerHandler|AddNoPublisherHandler|middleware\.Retry|MaxRetries:|pub\.Close|db\.Close|openReportDB|NewSubscriber|r\.routed|return nil/.test(line)
 }
 
-const sourceContext: Record<ReportMode, string> = { publish: 'GoChannel · in memory', subscribe: 'Subscriber · receive loop', router: 'Router · application handler', retry: 'Retry · handler middleware', durable: 'SQLite · beta' }
+const sourceContext: Record<ReportMode, string> = { publish: 'GoChannel · in memory', subscribe: 'Subscriber · receive loop', router: 'Router · application handler', retry: 'Retry · handler middleware', durable: 'PostgreSQL · Watermill SQL' }
 
 function eventName(kind: string) { return kind.replace(/[_-]/g, ' ') }
 function seconds(at: string, first?: string) {
@@ -99,7 +99,7 @@ export default function ReportSlide({ story }: { story: ReportStory }) {
     <div className="report-heading"><h2>{story.title} <span className="accent">{story.accent}</span></h2></div>
     <div className="report-columns">
       {active ? <LiveReport mode={story.mode} /> : <div className="report-live report-idle"><header className="report-live-header"><span className="report-label">LIVE DEMO</span><span className="report-cycle">Starts automatically</span></header><div className="report-state"><span className="report-status">Ready to run</span><h3>Follow one message.</h3></div><ReportFlow mode={story.mode} visual={reportVisual(story.mode, null)} /><p className="report-repeat">Starts on entry · repeats after a four-second result hold</p></div>}
-      <div className="report-lesson"><div className="report-code-heading"><span className="report-label">{story.mode === 'durable' ? 'GO SOURCE · CHECKS FOLDED' : 'ACTUAL GO SOURCE'}</span><span>{sourceContext[story.mode]}</span></div><pre className="report-source" aria-label={`Actual Go ${story.mode} implementation`}><code>{story.source.split('\n').map((line, index) => <span key={index} className={keySourceLine(line) ? 'report-code-line is-emphasized' : 'report-code-line'}>{line || ' '}</span>)}</code></pre><details className="report-lesson-details"><summary>Concept &amp; boundaries</summary><p>{story.explanation}</p><p className="report-concept">{story.concept}</p><p className="report-boundary">{story.boundary}</p></details></div>
+      <div className="report-lesson"><div className="report-code-heading"><span className="report-label">{story.mode === 'durable' ? 'GO SOURCE · SETUP & CHECKS FOLDED' : 'ACTUAL GO SOURCE'}</span><span>{sourceContext[story.mode]}</span></div><pre className="report-source" aria-label={`Actual Go ${story.mode} implementation`}><code>{story.source.split('\n').map((line, index) => <span key={index} className={keySourceLine(line) ? 'report-code-line is-emphasized' : 'report-code-line'}>{line || ' '}</span>)}</code></pre><details className="report-lesson-details"><summary>Concept &amp; boundaries</summary><p>{story.explanation}</p><p className="report-concept">{story.concept}</p><p className="report-boundary">{story.boundary}</p></details></div>
     </div>
   </div>
 }

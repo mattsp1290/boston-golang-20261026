@@ -26,13 +26,16 @@ function sourceExcerpt(name: string) {
       .replace(/\n\tr\.event\("ack", [^\n]*\)/, ' // … demo event …')
   }
   if (name === 'router') return source.replace(/\n\t\tselect \{[\s\S]*?\n\t\t\}/, '\n\t\t// … demo completion signal …')
+  if (name === 'durable-consume') return source.replace(/if err := r\.routed\(sub, nil\); err != nil \{[\s\S]*?\n\}/, 'if err := r.routed(sub, nil); err != nil { /* … */ }')
+  if (name.startsWith('postgres-')) return source
+    .replace(/if err != nil \{\n\treturn [^\n]*\n\}/g, '// … error handling omitted …')
   if (name !== 'durable') return source
   // Keep the real lifecycle calls, with omissions made explicit instead of showing
   // 30 lines of repeated error checks on a presentation slide.
   return source
     .replace(/if err := pub\.Close\(\); err != nil \{[\s\S]*?\n\}/, 'if err := pub.Close(); err != nil { /* … */ }')
     .replace(/if err := db\.Close\(\); err != nil \{[\s\S]*?\n\}/, 'if err := db.Close(); err != nil { /* … */ }')
-    .replace(/r\.event\("db-closed"[\s\S]*?(?=db, err = openReportDB)/, '// … brief pause with every connection closed …\n')
+    .replace(/r\.event\("db-closed"[\s\S]*?(?=db, err = openReportDB)/, '// … pause with this demo’s database connections closed …\n')
     .replace(/if err != nil \{\n\treturn err\n\}/g, '// … error handling omitted …')
 }
 
@@ -46,7 +49,7 @@ const reportStories: Record<LessonMode, ReportStory & { notes: string; footer: s
     concept: 'Published is not processed. No handler runs and no CSV is generated on this slide.',
     boundary: 'A buffered GoChannel subscription is already listening, but no handler is attached. The demo cleans up the message after this run; it is not retained for a later slide.',
     source: sourceExcerpt('publish'),
-    notes: liveNotes + 'This is deliberately only a Publisher demonstration. Point to the message ID, payload, topic, and Publish call. Before publishing, the demo establishes a live buffered GoChannel subscription. The terminal Published state means Publish returned nil and availability in that buffered channel was observed. No application receive, handler, Ack, or CSV occurs. GoChannel is live-only; cleanup removes the subscription and message, and later demos create isolated runs. This does not prove offline retention or durable storage. Source: https://watermill.io/docs/pub-sub/.',
+    notes: liveNotes + 'This is deliberately only a Publisher demonstration. Point to the message ID, payload, topic, and Publish call. Before publishing, the demo establishes a live buffered GoChannel subscription. The terminal Published state means Publish returned nil and availability in that buffered channel was observed. No application receive, handler, Ack, or CSV occurs. This GoChannel configuration is live-only; cleanup removes the subscription and message, and later demos create isolated runs. This does not prove offline retention or durable storage. Source: https://watermill.io/docs/pub-sub/.',
     footer: 'PUBLISH: MESSAGE → TOPIC',
   },
   router: {
@@ -71,12 +74,12 @@ const reportStories: Record<LessonMode, ReportStory & { notes: string; footer: s
   },
   durable: {
     mode: 'durable', step: '06 / ADVANCED: PERSISTENCE · LIVE',
-    title: 'Close every connection.', accent: 'Keep the message.',
-    explanation: 'Publish to a SQLite file before a Subscriber exists. Close every connection, reopen the same file, then start delivery.',
-    concept: 'The message stays on disk. After reopening, the Router invokes the handler without publishing again.',
-    boundary: 'Official Watermill SQLite transport (beta). This tests a connection restart, not a process crash or an exactly-once guarantee.',
-    source: sourceExcerpt('durable'),
-    notes: liveNotes + 'Advanced extension after Publish, Handle, and Middleware. The queued message is stored in a real SQLite file. No Subscriber exists when publishing. The publisher and every database connection close, then the server opens a new connection pool to the same file and creates the Subscriber. The Go application process remains alive throughout: this is not a process crash or a power-loss test. If you use the word worker aloud, define it as the application process running a Subscriber, Router, and handler, not as another name for one of those components. Job status lives in demo memory; the message lives on disk. Every run is isolated and deleted on cleanup. SQLite support is beta. Source: https://watermill.io/pubsubs/sqlite/.',
+    title: 'Reconnect to Postgres.', accent: 'Keep the message.',
+    explanation: 'Publish through Watermill SQL before a Subscriber exists. Close this demo’s database connections, reconnect to PostgreSQL, then start delivery.',
+    concept: 'The Publisher and Subscriber adapters change. The Router still invokes the same report handler, without publishing again.',
+    boundary: 'Requires REPORT_POSTGRES_DSN. This tests database connection close/reopen, not a process or PostgreSQL server restart or an exactly-once guarantee.',
+    source: sourceExcerpt('durable') + '\n// … configure PostgreSQL Subscriber (previous slide) …\n' + sourceExcerpt('durable-consume'),
+    notes: liveNotes + 'Advanced extension after Publish, Handle, and Middleware. GoChannel was our starting in-memory choice, not a universal Watermill default. Swap only the transport adapters for the official Watermill SQL PostgreSQL Publisher and Subscriber; the Router and r.process handler stay the same. The queued message is stored in PostgreSQL. No Subscriber exists when publishing. The publisher and this run’s database connection pool close, then the demo opens a new pool to the same database and only then creates the Subscriber. The PostgreSQL server and Go application process remain alive throughout: this is not a process crash or a power-loss test. If you use the word worker aloud, define it as the application process running a Subscriber, Router, and handler, not as another name for one of those components. Job status lives in demo memory. Each run is isolated and cleaned up. A missing REPORT_POSTGRES_DSN or unavailable PostgreSQL produces a visible API error; there is no simulated durable fallback. Source: https://watermill.io/pubsubs/sql/.',
     footer: 'ADVANCED: TRANSPORT DEFINES PERSISTENCE',
   },
 }
@@ -128,7 +131,7 @@ function LessonArrow({ text }: { text: string }) {
 export default function App() {
   return (
     <Deck config={config} plugins={plugins} className="watermill-deck">
-      <Slide id="title" notes="Welcome to Boston Golang. This is a short introduction to Watermill, a Go library for building message-driven applications. Follow the Watermill learning order: Publish, Handle, Middleware. Explain each idea before its live example, then add SQLite persistence as an advanced extension.">
+      <Slide id="title" notes="Welcome to Boston Golang. This is a short introduction to Watermill, a Go library for building message-driven applications. Follow the Watermill learning order: Publish, Handle, Middleware. Explain each idea before its live example, then move our in-memory GoChannel example to PostgreSQL as an advanced extension.">
         <div className="slide-content title-slide">
           <SlideHeader section="OCTOBER 26, 2026" />
           <div className="title-body">
@@ -150,7 +153,7 @@ export default function App() {
           <div className="slide-footer"><span>WATERMILL / AN INTRODUCTION</span><span>GO, ONE MESSAGE AT A TIME.</span></div>
         </div>
       </Slide>
-      <Slide id="watermill" notes="Watermill is a Go library, not a broker. Follow its getting-started progression: Publish, Handle, Middleware. Introduce the message first, then the function that processes it, then a wrapper around that function. Each idea gets an explanation before a live example. A short Subscriber bridge separates transport delivery from application handling. After the core path, SQLite persistence is an advanced extension. Publisher and Subscriber APIs are shared across transports, but persistence and delivery semantics depend on implementation and configuration. Make handlers idempotent. Source: https://watermill.io/learn/getting-started/.">
+      <Slide id="watermill" notes="Watermill is a Go library, not a broker. Follow its getting-started progression: Publish, Handle, Middleware. Introduce the message first, then the function that processes it, then a wrapper around that function. Each idea gets an explanation before a live example. A short Subscriber bridge separates transport delivery from application handling. After the core path, PostgreSQL persistence is an advanced extension. GoChannel is this example’s starting in-memory choice, not a universal Watermill default. Publisher and Subscriber APIs are shared across transports, but persistence and delivery semantics depend on implementation and configuration. Make handlers idempotent. Source: https://watermill.io/learn/getting-started/.">
         <div className="slide-content intro-slide">
           <SlideHeader section="02 / THE LEARNING PATH" />
           <div className="intro-body"><p className="eyebrow">WHAT IS WATERMILL?</p><h2>Go services.<br /><span className="accent">Connected by messages.</span></h2><p className="intro-description">A Go library, not a broker. Learn one piece at a time.</p>
@@ -204,10 +207,21 @@ export default function App() {
         <div className="lesson-takeaway"><strong>One message. Three handler calls.</strong><p>Not three publications. Not three transport deliveries.</p></div>
       </LessonSlide>
       <LiveSlide mode="retry" />
-      <LessonSlide id="lesson-durable" section="06 / ADVANCED: PERSISTENCE · THE IDEA" title="Same interfaces." accent="Different storage." description="GoChannel keeps nothing on disk. A durable transport can preserve a message until a Subscriber is ready." source="https://watermill.io/pubsubs/sqlite/" notes="This is an advanced extension, separate from the core Publish, Handle, Middleware progression. Persistence comes from the selected transport and its configuration, not from the Router or Retry middleware. The demonstration publishes to a real SQLite file without a Subscriber, closes all connections, opens a new connection pool to the same file, and only then creates the Subscriber and starts the Router. The application process remains running and status is still in memory. This does not test a process crash, power loss, or exactly-once processing. The official SQLite transport is beta. Source: https://watermill.io/pubsubs/sqlite/.">
-        <div className="lesson-disk" aria-label="SQLite keeps the message on disk while all database connections are closed"><span className="lesson-label">SQLITE FILE</span><strong>Message stays here.</strong><p>Even with every database connection closed.</p></div>
-        <ol className="lesson-steps"><li><span>1</span><strong>Publish</strong><p>No Subscriber yet.</p></li><li><span>2</span><strong>Close</strong><p>Every connection closes.</p></li><li><span>3</span><strong>Reopen</strong><p>Start delivery. Do not republish.</p></li></ol>
-        <div className="lesson-takeaway"><strong>Connection restart, not process restart.</strong><p>SQLite transport is beta. This is not an exactly-once claim.</p></div>
+      <LessonSlide id="lesson-durable" section="06 / ADVANCED: PERSISTENCE · THE IDEA" title="Swap the transport." accent="Keep the handler." description="GoChannel is our starting in-memory choice, not a universal Watermill default. Replace its Publisher and Subscriber adapters with PostgreSQL." source="https://watermill.io/pubsubs/sql/" notes="This is an advanced extension, separate from the core Publish, Handle, Middleware progression. GoChannel implements both Publisher and Subscriber in one in-memory adapter; it is not the universal Watermill default. The real configuration excerpts show a move to the official Watermill SQL PostgreSQL adapters. The SQL Publisher inserts messages; the SQL Subscriber polls stored rows and tracks consumer-group offsets. The schema and offsets adapters are PostgreSQL-specific. Configuration excerpts are shown together for comparison, but the demo constructs the SQL Subscriber only after reconnecting. The same r.process application handler and Router acknowledgement contract remain unchanged. Persistence comes from the selected transport and configuration, not the Router or Retry middleware. The demo publishes with no Subscriber, closes its database connection pool, reconnects to the same database, and then starts delivery without republishing. PostgreSQL and the application process keep running; no process restart, power loss, or exactly-once processing is demonstrated. REPORT_POSTGRES_DSN must point to a reachable PostgreSQL database; without it the live slide shows an actionable error instead of simulating storage. Source: https://watermill.io/pubsubs/sql/.">
+        <div className="transport-comparison" aria-label="Actual Go configuration comparison: GoChannel to PostgreSQL">
+          <div className="transport-config transport-config-memory">
+            <div className="transport-config-heading"><span className="lesson-label">START HERE · IN MEMORY</span><h3>GoChannel</h3></div>
+            <pre className="lesson-source" aria-label="Actual GoChannel adapter configuration"><code>{sourceExcerpt('gochannel')}</code></pre>
+            <p className="lesson-small">One adapter implements Publisher + Subscriber. No database; no offline retention in this configuration.</p>
+            <div className="transport-handler"><span className="lesson-label">UNCHANGED APPLICATION CODE</span><strong>Same report handler.</strong><p>The Router still calls <code>r.process(msg)</code>.</p></div>
+          </div>
+          <div className="transport-config transport-config-postgres">
+            <div className="transport-config-heading"><span className="lesson-label">SWAP ADAPTERS · WATERMILL SQL</span><h3>PostgreSQL</h3></div>
+            <pre className="lesson-source" aria-label="Actual PostgreSQL adapter configuration"><code>{sourceExcerpt('postgres-publisher') + '\n// … after close and reconnect, create the Subscriber …\n' + sourceExcerpt('postgres-subscriber')}</code></pre>
+            <p className="transport-source-note">Actual reports.go excerpts · pool, table setup, cleanup and checks omitted. Set REPORT_POSTGRES_DSN.</p>
+          </div>
+        </div>
+        <div className="lesson-takeaway"><strong>Connection restart, not process restart.</strong><p>Next: publish with no Subscriber, close connections, reconnect, then consume. No republish.</p></div>
       </LessonSlide>
       <LiveSlide mode="durable" />
     </Deck>

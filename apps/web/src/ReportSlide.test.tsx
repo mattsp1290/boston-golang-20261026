@@ -170,8 +170,8 @@ it('derives retry and durable teaching stages solely from server snapshots', () 
   expect(reportVisual('durable', snapshot(['queued'])).stage).toBe('Queued')
   expect(reportVisual('durable', snapshot(['worker-offline'])).stage).toBe('Consumer offline')
   expect(reportVisual('durable', snapshot(['worker-offline', 'published'])).stage).toBe('Consumer offline')
-  expect(reportVisual('durable', snapshot(['worker-offline', 'db-closed'])).stage).toBe('Saved on disk')
-  expect(reportVisual('durable', snapshot(['worker-offline', 'db-closed', 'db-reopened'])).stage).toBe('Saved on disk')
+  expect(reportVisual('durable', snapshot(['worker-offline', 'db-closed'])).stage).toBe('Connections closed')
+  expect(reportVisual('durable', snapshot(['worker-offline', 'db-closed', 'db-reopened'])).stage).toBe('Database reconnected')
   expect(reportVisual('durable', snapshot(['db-closed', 'worker-online'])).stage).toBe('Consumer starts')
   expect(reportVisual('durable', snapshot(['worker-online', 'attempt'], 'Processing', 1)).executionState).toBe('processing')
   expect(reportVisual('durable', snapshot(['ready'], 'Ready', 1)).stage).toBe('Ready')
@@ -208,4 +208,25 @@ it('shows the actual CSV only as the Router application result', async () => {
   expect(screen.getByTestId('result-node')).toHaveTextContent('CSV generated')
   expect(screen.getByTestId('message-token')).toHaveAttribute('data-location', 'handler')
   expect(screen.queryByTestId('ack-return')).not.toBeInTheDocument()
+})
+
+
+it('shows the real missing PostgreSQL configuration error without simulating durable progress or replaying', async () => {
+  const error = 'PostgreSQL persistence is not configured. Set REPORT_POSTGRES_DSN to a reachable PostgreSQL database and restart the API.'
+  vi.mocked(runReportScenario).mockImplementationOnce(async (_mode, _signal, update) => {
+    const run: ReportRun = { ...result, mode: 'durable', status: 'Error', attempts: 0, csv: undefined, error,
+      events: [{ sequence: 1, kind: 'error', detail: error, at: '2026-10-26T10:00:00Z' }] }
+    update(run)
+    return run
+  })
+  render(<LiveReport mode="durable" />)
+  await settle(); await advance(30_000)
+  expect(screen.getByRole('alert')).toHaveTextContent('Set REPORT_POSTGRES_DSN')
+  expect(screen.getByRole('alert')).toHaveTextContent('restart the API')
+  expect(screen.getByLabelText('Replay status')).toHaveTextContent('Automatic replay paused')
+  expect(screen.getByTestId('transport-node')).toHaveTextContent('PostgreSQL')
+  expect(screen.queryByTestId('message-token')).not.toBeInTheDocument()
+  expect(screen.queryByTestId('database-retention')).not.toBeInTheDocument()
+  expect(screen.getByTestId('consumer-node')).toHaveTextContent('Not started')
+  expect(runReportScenario).toHaveBeenCalledTimes(1)
 })

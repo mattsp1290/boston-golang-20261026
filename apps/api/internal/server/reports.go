@@ -7,22 +7,26 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill"
-	"github.com/ThreeDotsLabs/watermill-sqlite/wmsqlitemodernc"
+	wmsql "github.com/ThreeDotsLabs/watermill-sql/v4/pkg/sql"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	"github.com/gofiber/fiber/v3"
-	_ "modernc.org/sqlite"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 const reportTopic = "reports"
 const maxReportRuns = 16
+
+var reportRunIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 type reportEvent struct {
 	Sequence int       `json:"sequence"`
@@ -48,6 +52,12 @@ type reportRun struct {
 	done   chan struct{}
 	expiry *time.Timer
 	delay  time.Duration
+
+	// Only failed PostgreSQL cleanup is retained, bounded by maxReportRuns.
+	// Never include the closure (which captures its DSN) in the public view.
+	cleanupMu  sync.Mutex
+	cleanup    func() error
+	cleanupErr error
 }
 
 func (r *reportRun) snapshot() reportView {
@@ -103,7 +113,7 @@ func (r *reportRun) publish(pub message.Publisher) error {
 	// demo:publish:start
 	msg := message.NewMessage(r.view.MessageID, []byte(`{"report":"weekly-summary"}`))
 	msg.SetContext(r.ctx)
-	if err := pub.Publish(reportTopic, msg); err != nil {
+	if err := pub.Publish(r.topic(), msg); err != nil {
 		return err
 	}
 	// demo:publish:end
@@ -120,7 +130,7 @@ func (r *reportRun) routed(sub message.Subscriber, publish func() error) error {
 	}
 	done := make(chan struct{}, 1)
 	// demo:router:start
-	handler := router.AddConsumerHandler("generate-report", reportTopic, sub,
+	handler := router.AddConsumerHandler("generate-report", r.topic(), sub,
 		func(msg *message.Message) error {
 			if err := r.process(msg); err != nil {
 				return err
@@ -168,74 +178,247 @@ func (r *reportRun) routed(sub message.Subscriber, publish func() error) error {
 		return r.ctx.Err()
 	}
 }
-func openReportDB(path string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		return nil, err
+
+// Every durable run owns two generated tables, never a shared offsets table.
+// Names are well below PostgreSQL's 63-byte limit. Request input cannot choose them.
+type reportPostgresTableNames struct{ topic, messages, offsets string }
+
+func reportPostgresTables(runID string) (reportPostgresTableNames, error) {
+	if !reportRunIDPattern.MatchString(runID) {
+		return reportPostgresTableNames{}, errors.New("invalid generated report run ID")
 	}
-	db.SetMaxOpenConns(1)
-	if err = db.Ping(); err != nil {
+	suffix := strings.ReplaceAll(runID, "-", "")
+	return reportPostgresTableNames{
+		topic: "report_demo_" + suffix, messages: "watermill_messages_" + suffix,
+		offsets: "watermill_offsets_" + suffix,
+	}, nil
+}
+func (n reportPostgresTableNames) messagesTable(string) string {
+	return pgx.Identifier{"public", n.messages}.Sanitize()
+}
+func (n reportPostgresTableNames) offsetsTable(string) string {
+	return pgx.Identifier{"public", n.offsets}.Sanitize()
+}
+func (r *reportRun) topic() string {
+	if r.view.Mode == "durable" {
+		// durable validates the server-generated ID before constructing adapters.
+		names, _ := reportPostgresTables(r.view.ID)
+		return names.topic
+	}
+	return reportTopic
+}
+
+// Never include driver errors in API snapshots: they can contain credentials,
+// hostnames, or DSN text. Give the presenter an actionable, bounded diagnosis.
+func reportPostgresError(ctx context.Context, action string, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "28P01", "28000":
+			return fmt.Errorf("PostgreSQL %s failed: check the credentials in REPORT_POSTGRES_DSN", action)
+		case "42501":
+			return fmt.Errorf("PostgreSQL %s failed: the demo role needs CREATE in public and access to its own tables", action)
+		case "3D000":
+			return fmt.Errorf("PostgreSQL %s failed: create the demo database named in REPORT_POSTGRES_DSN", action)
+		}
+	}
+	return fmt.Errorf("PostgreSQL %s failed: check REPORT_POSTGRES_DSN, server availability, and demo database permissions", action)
+}
+
+func openReportDB(ctx context.Context, dsn string) (*sql.DB, error) {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, errors.New("invalid REPORT_POSTGRES_DSN: use a PostgreSQL connection URI or keyword connection string")
+	}
+	config.ConnectTimeout = 3 * time.Second
+	config.RuntimeParams["statement_timeout"] = "3000"
+	config.RuntimeParams["lock_timeout"] = "1000"
+	db := stdlib.OpenDB(*config)
+	db.SetMaxOpenConns(2)
+	db.SetMaxIdleConns(2)
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := db.PingContext(pingCtx); err != nil {
 		_ = db.Close()
-		return nil, err
+		return nil, reportPostgresError(ctx, "connection", err)
 	}
 	return db, nil
 }
-func (r *reportRun) durable() error {
-	dir, err := os.MkdirTemp("", "watermill-report-")
+
+// Use the official adapters' DDL, but run it with our cancellable context.
+// Their automatic initialization uses an independent 60-second context.
+func initializeReportTables(ctx context.Context, db *sql.DB, names reportPostgresTableNames,
+	schema wmsql.DefaultPostgreSQLSchema, offsets wmsql.DefaultPostgreSQLOffsetsAdapter,
+) (owned bool, err error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	// Hold the adapter's same initialization lock before checking ownership.
+	// A second initializer must not adopt tables created after its preflight.
+	lock := wmsql.DefaultSchemaInitializationLock("watermill")
+	if schema.InitializeSchemaLock > 0 {
+		lock = schema.InitializeSchemaLock
+	}
+	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock($1)", lock); err != nil {
+		return false, err
+	}
+	var exists bool
+	err = tx.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL OR to_regclass($2) IS NOT NULL",
+		names.messagesTable(""), names.offsetsTable("")).Scan(&exists)
+	if err != nil || exists {
+		if err == nil {
+			err = errors.New("generated report table already exists; refusing to reuse or remove it")
+		}
+		return false, err
+	}
+	queries, err := schema.SchemaInitializingQueries(wmsql.SchemaInitializingQueriesParams{Topic: names.topic})
+	if err != nil {
+		return false, err
+	}
+	offsetQueries, err := offsets.SchemaInitializingQueries(wmsql.OffsetsSchemaInitializingQueriesParams{Topic: names.topic})
+	if err != nil {
+		return false, err
+	}
+	for _, query := range append(queries, offsetQueries...) {
+		if _, err := tx.ExecContext(ctx, query.Query, query.Args...); err != nil {
+			return true, err
+		}
+	}
+	// Cleanup also runs after an uncertain commit, but only for these new names.
+	return true, tx.Commit()
+}
+
+func cleanupReportTables(dsn, runID string) error {
+	names, err := reportPostgresTables(runID)
+	if err != nil {
+		return err // Validate again before constructing any DROP statement.
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel() // Cleanup must still work after navigation cancels the run.
+	db, err := openReportDB(ctx, dsn)
+	if err != nil {
+		return errors.New("PostgreSQL cleanup could not connect: check REPORT_POSTGRES_DSN; this run's isolated tables may remain")
+	}
+	defer db.Close()
+	// No database/schema deletion, wildcard lookup, shared table, or CASCADE.
+	_, err = db.ExecContext(ctx, "DROP TABLE IF EXISTS "+names.offsetsTable("")+", "+names.messagesTable(""))
+	if err != nil {
+		return errors.New("PostgreSQL cleanup failed: this run's isolated tables may remain; check demo database permissions and availability")
+	}
+	return nil
+}
+
+func (r *reportRun) durable() (result error) {
+	dsn := strings.TrimSpace(os.Getenv("REPORT_POSTGRES_DSN"))
+	if dsn == "" {
+		return errors.New("PostgreSQL demo is not configured: set REPORT_POSTGRES_DSN in the root .env and restart the API; GoChannel demos do not need a database")
+	}
+	names, err := reportPostgresTables(r.view.ID)
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(dir)
-	path := filepath.Join(dir, "queue.sqlite")
-	db, err := openReportDB(path)
+	db, err := openReportDB(r.ctx, dsn)
 	if err != nil {
 		return err
 	}
-	pub, err := wmsqlitemodernc.NewPublisher(db, wmsqlitemodernc.PublisherOptions{InitializeSchema: true})
+	var pub *wmsql.Publisher
+	var sub *wmsql.Subscriber
+	owned := false
+	defer func() {
+		// routed has already joined Router.Run. Close the subscriber before its
+		// pool, and every worker/publisher pool before deleting any table.
+		if sub != nil {
+			result = errors.Join(result, sub.Close())
+		}
+		if pub != nil {
+			result = errors.Join(result, pub.Close())
+		}
+		if db != nil {
+			if err := db.Close(); err != nil {
+				result = errors.Join(result, errors.New("PostgreSQL connection pool could not close"))
+			}
+		}
+		if owned {
+			cleanup := func() error { return cleanupReportTables(dsn, r.view.ID) }
+			if err := cleanup(); err != nil {
+				r.cleanupMu.Lock()
+				r.cleanup, r.cleanupErr = cleanup, err
+				r.cleanupMu.Unlock()
+				result = errors.Join(result, err)
+			} else {
+				r.event("cleaned-up", "Worker connections closed; only this run's PostgreSQL message and offset tables removed.")
+			}
+		}
+	}()
+
+	schema := wmsql.DefaultPostgreSQLSchema{GenerateMessagesTableName: names.messagesTable, SubscribeBatchSize: 1}
+	offsets := wmsql.DefaultPostgreSQLOffsetsAdapter{GenerateMessagesOffsetsTableName: names.offsetsTable}
+	owned, err = initializeReportTables(r.ctx, db, names, schema, offsets)
 	if err != nil {
-		_ = db.Close()
+		return reportPostgresError(r.ctx, "table setup", err)
+	}
+	// demo:postgres-publisher:start
+	// Tables were initialized with bounded, cancellable setup above.
+	pub, err = wmsql.NewPublisher(wmsql.BeginnerFromStdSQL(db), wmsql.PublisherConfig{
+		SchemaAdapter:        schema, // DefaultPostgreSQLSchema
+		AutoInitializeSchema: false,
+	}, watermill.NopLogger{})
+	// demo:postgres-publisher:end
+	if err != nil {
+		return reportPostgresError(r.ctx, "publisher setup", err)
+	}
+	r.event("worker-offline", "No subscriber exists. Publish into a real PostgreSQL message table.")
+	if err := r.pause(); err != nil {
 		return err
 	}
-	r.event("worker-offline", "No subscriber exists. Publish into file-backed SQLite.")
-	if err = r.pause(); err != nil {
-		_ = pub.Close()
-		_ = db.Close()
-		return err
-	}
-	if err = r.publish(pub); err != nil {
-		_ = pub.Close()
-		_ = db.Close()
-		return err
+	if err := r.publish(pub); err != nil {
+		return reportPostgresError(r.ctx, "publish", err)
 	}
 	// demo:durable:start
 	if err := pub.Close(); err != nil {
-		_ = db.Close()
-		return err
+		return reportPostgresError(r.ctx, "publisher close", err)
 	}
+	pub = nil
 	if err := db.Close(); err != nil {
-		return err
+		return reportPostgresError(r.ctx, "connection close", err)
 	}
-	r.event("db-closed", "All database connections closed. Request remains on disk.")
+	db = nil
+	r.event("db-closed", "All connections owned by this run are closed. PostgreSQL is still running; no subscriber exists.")
 	for range 3 {
 		if err := r.pause(); err != nil {
 			return err
 		}
 	}
-	db, err = openReportDB(path) // Same file, a completely new connection pool.
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	sub, err := wmsqlitemodernc.NewSubscriber(db, wmsqlitemodernc.SubscriberOptions{
-		InitializeSchema: true, PollInterval: 50 * time.Millisecond, BatchSize: 1,
-	})
+	db, err = openReportDB(r.ctx, dsn) // Same PostgreSQL database, new pool.
 	if err != nil {
 		return err
 	}
 	// demo:durable:end
-	defer sub.Close()
-	r.event("db-reopened", "New SQLite connections opened. Start the subscriber and Router; do not republish.")
-	return r.routed(sub, nil)
+	// demo:postgres-subscriber:start
+	sub, err = wmsql.NewSubscriber(wmsql.BeginnerFromStdSQL(db), wmsql.SubscriberConfig{
+		SchemaAdapter:  schema,  // DefaultPostgreSQLSchema
+		OffsetsAdapter: offsets, // DefaultPostgreSQLOffsetsAdapter
+		ConsumerGroup:  "report-worker", InitializeSchema: false,
+		PollInterval: 50 * time.Millisecond,
+	}, watermill.NopLogger{})
+	// demo:postgres-subscriber:end
+	if err != nil {
+		return reportPostgresError(r.ctx, "subscriber setup", err)
+	}
+	r.event("db-reopened", "New PostgreSQL connections opened. Start the subscriber and Router; do not republish.")
+	// demo:durable-consume:start
+	if err := r.routed(sub, nil); err != nil {
+		return reportPostgresError(r.ctx, "consume", err)
+	}
+	// demo:durable-consume:end
+	return nil
 }
 
 // publication observes a buffered delivery without invoking application code.
@@ -303,7 +486,9 @@ func (r *reportRun) execute() {
 	} else if r.view.Mode == "durable" {
 		err = r.durable()
 	} else {
+		// demo:gochannel:start
 		bus := gochannel.NewGoChannel(gochannel.Config{OutputChannelBuffer: 1}, watermill.NopLogger{})
+		// demo:gochannel:end
 		defer bus.Close()
 		if r.view.Mode == "publish" {
 			err = r.publication(bus)
@@ -350,7 +535,7 @@ func (h *reportHub) start(mode string) (*reportRun, error) {
 		return nil, fiber.NewError(503, "Report service is shutting down")
 	}
 	if len(h.runs) >= maxReportRuns {
-		return nil, fiber.NewError(503, "Demo capacity reached; leave other demo tabs or wait 90 seconds")
+		return nil, fiber.NewError(503, "Demo capacity reached; leave other tabs, retry failed cleanup, or wait 90 seconds for completed runs")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	r := &reportRun{view: reportView{ID: watermill.NewUUID(), Mode: mode, Status: "Queued", MessageID: watermill.NewUUID(), Events: []reportEvent{}}, ctx: ctx, cancel: cancel, done: make(chan struct{}), delay: h.delay}
@@ -360,20 +545,41 @@ func (h *reportHub) start(mode string) (*reportRun, error) {
 	go r.execute()
 	return r, nil
 }
-func (h *reportHub) remove(id string) {
+func (h *reportHub) remove(id string) error {
 	h.mu.Lock()
 	r := h.runs[id]
 	h.mu.Unlock()
 	if r != nil {
+		alreadyFinished := false
+		select {
+		case <-r.done:
+			alreadyFinished = true
+		default:
+		}
 		r.expiry.Stop()
 		r.cancel()
 		<-r.done
+		r.cleanupMu.Lock()
+		// Don't immediately repeat cleanup that just failed during cancellation.
+		// A later DELETE may retry the same bounded, isolated cleanup operation.
+		if alreadyFinished && r.cleanup != nil {
+			r.cleanupErr = r.cleanup()
+			if r.cleanupErr == nil {
+				r.cleanup = nil // Release the captured DSN as soon as cleanup succeeds.
+			}
+		}
+		cleanupErr := r.cleanupErr
+		r.cleanupMu.Unlock()
+		if cleanupErr != nil {
+			return fiber.NewError(503, cleanupErr.Error())
+		}
 		h.mu.Lock()
 		if h.runs[id] == r {
 			delete(h.runs, id)
 		}
 		h.mu.Unlock()
 	}
+	return nil
 }
 func (h *reportHub) close() {
 	h.mu.Lock()
@@ -411,5 +617,10 @@ func (h *reportHub) routes(app *fiber.App) {
 		}
 		return c.JSON(r.snapshot())
 	})
-	app.Delete("/api/reports/runs/:id", func(c fiber.Ctx) error { h.remove(c.Params("id")); return c.SendStatus(204) })
+	app.Delete("/api/reports/runs/:id", func(c fiber.Ctx) error {
+		if err := h.remove(c.Params("id")); err != nil {
+			return err
+		}
+		return c.SendStatus(204)
+	})
 }

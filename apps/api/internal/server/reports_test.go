@@ -2,8 +2,11 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	"io"
@@ -38,6 +41,9 @@ func awaitReport(t *testing.T, r *reportRun) reportView {
 func TestReportsPublicationAndGenerationModes(t *testing.T) {
 	for _, mode := range []string{"publish", "subscribe", "router", "retry", "durable"} {
 		t.Run(mode, func(t *testing.T) {
+			if mode == "durable" {
+				requireReportPostgres(t)
+			}
 			h := testReportHub(t)
 			r, err := h.start(mode)
 			if err != nil {
@@ -124,16 +130,56 @@ func TestReportsPublicationAndGenerationModes(t *testing.T) {
 	}
 }
 
+func requireReportPostgres(t *testing.T) string {
+	t.Helper()
+	dsn := os.Getenv("TEST_REPORT_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("set TEST_REPORT_POSTGRES_DSN to a dedicated disposable PostgreSQL database for integration tests")
+	}
+	t.Setenv("REPORT_POSTGRES_DSN", dsn)
+	return dsn
+}
+
+func TestReportsPostgresMissingConfiguration(t *testing.T) {
+	t.Setenv("REPORT_POSTGRES_DSN", "")
+	h := testReportHub(t)
+	r, err := h.start("durable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := awaitReport(t, r)
+	if v.Status != "Error" || !strings.Contains(v.Error, "REPORT_POSTGRES_DSN") || v.Attempts != 0 || v.CSV != "" {
+		t.Fatalf("missing PostgreSQL configuration was not actionable: %+v", v)
+	}
+	for _, e := range v.Events {
+		if e.Kind == "published" || e.Kind == "db-closed" {
+			t.Fatalf("false persistence evidence: %+v", e)
+		}
+	}
+	// Optional persistence setup must not prevent the in-memory demos from running.
+	memory, err := h.start("router")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := awaitReport(t, memory); got.Status != "Ready" {
+		t.Fatalf("memory demo requires PostgreSQL: %+v", got)
+	}
+}
+
 func TestReportsDurableOfflinePauseHasNoAttempts(t *testing.T) {
-	tempRoot := t.TempDir()
-	t.Setenv("TMPDIR", tempRoot)
+	dsn := requireReportPostgres(t)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
 	h := testReportHub(t)
 	h.delay = 150 * time.Millisecond
 	r, err := h.start("durable")
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	observed := false
 	for time.Now().Before(deadline) {
 		v := r.snapshot()
@@ -144,26 +190,66 @@ func TestReportsDurableOfflinePauseHasNoAttempts(t *testing.T) {
 		}
 		if closed && !reopened {
 			if v.Attempts != 0 || v.CSV != "" {
-				t.Fatalf("worker ran while offline: %+v", v)
+				t.Fatalf("handler ran while offline: %+v", v)
 			}
 			observed = true
 			break
 		}
+		if v.Status == "Error" {
+			t.Fatalf("PostgreSQL run failed: %+v", v)
+		}
 		time.Sleep(time.Millisecond)
 	}
 	if !observed {
-		t.Fatal("never observed persisted message with all original connections closed")
+		t.Fatal("never observed persisted message with original connections closed")
 	}
-	files, err := os.ReadDir(tempRoot)
-	if err != nil || len(files) != 1 {
-		t.Fatalf("expected one real run directory while offline: %v %v", files, err)
+	names, err := reportPostgresTables(r.view.ID)
+	if err != nil {
+		t.Fatal(err)
 	}
+	var storedID string
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := db.QueryRowContext(ctx, fmt.Sprintf(`SELECT uuid FROM public."%s"`, names.messages)).Scan(&storedID); err != nil {
+		t.Fatal(err)
+	}
+	if storedID != r.view.MessageID {
+		t.Fatalf("persisted ID %q want %q", storedID, r.view.MessageID)
+	}
+
 	if got := awaitReport(t, r); got.Status != "Ready" {
-		t.Fatalf("reopened queue did not deliver: %+v", got)
+		t.Fatalf("reopened PostgreSQL subscription did not deliver: %+v", got)
 	}
-	files, err = os.ReadDir(tempRoot)
-	if err != nil || len(files) != 0 {
-		t.Fatalf("temporary SQLite resources were not removed: %v %v", files, err)
+	for _, name := range []string{names.messages, names.offsets} {
+		var exists bool
+		if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+name).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Fatalf("run left PostgreSQL table %s", name)
+		}
+	}
+}
+
+func TestReportsPostgresTableNamesAreIsolated(t *testing.T) {
+	ids := []string{"a1234567-1234-1234-1234-123456789abc", "b1234567-1234-1234-1234-123456789abc"}
+	used := map[string]bool{}
+	for _, id := range ids {
+		names, err := reportPostgresTables(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, name := range []string{names.topic, names.messages, names.offsets} {
+			if len(name) > 63 || used[name] || strings.ContainsAny(name, "\"'; ") {
+				t.Fatalf("unsafe or colliding identifier %q", name)
+			}
+			used[name] = true
+		}
+	}
+	for _, id := range []string{"", "reports", `x"; DROP TABLE reports;--`, "A1234567-1234-1234-1234-123456789abc"} {
+		if _, err := reportPostgresTables(id); err == nil {
+			t.Fatalf("unsafe ID accepted: %q", id)
+		}
 	}
 }
 
@@ -349,7 +435,11 @@ func TestReportsSustainedReplayReleasesCapacity(t *testing.T) {
 	h := testReportHub(t)
 	h.delay = time.Millisecond
 	previousIDs := map[string]bool{}
-	modes := []string{"publish", "subscribe", "router", "retry", "durable"}
+	modes := []string{"publish", "subscribe", "router", "retry"}
+	if os.Getenv("TEST_REPORT_POSTGRES_DSN") != "" {
+		requireReportPostgres(t)
+		modes = append(modes, "durable")
+	}
 	for i := 0; i < maxReportRuns*3; i++ {
 		r, err := h.start(modes[i%len(modes)])
 		if err != nil {
@@ -433,5 +523,194 @@ func TestReportSubscriberClosedAndCancelled(t *testing.T) {
 		if r.snapshot().CSV != "" {
 			t.Fatal("closed/canceled subscriber generated output")
 		}
+	}
+}
+
+func TestReportsPostgresCancellationCleansOnlyOwnTables(t *testing.T) {
+	dsn := requireReportPostgres(t)
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	h := testReportHub(t)
+	h.delay = 500 * time.Millisecond
+	first, err := h.start("durable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := h.start("durable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(6 * time.Second)
+	for {
+		bothClosed := true
+		for _, r := range []*reportRun{first, second} {
+			closed := false
+			v := r.snapshot()
+			if v.Status == "Error" {
+				t.Fatalf("PostgreSQL setup failed: %+v", v)
+			}
+			for _, event := range v.Events {
+				if event.Kind == "db-closed" {
+					closed = true
+				}
+			}
+			bothClosed = bothClosed && closed
+		}
+		if bothClosed {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("did not reach concurrent offline stage")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	h.remove(first.view.ID)
+	if v := first.snapshot(); v.Status != "Error" || v.Attempts != 0 {
+		t.Fatalf("canceled offline run did work: %+v", v)
+	}
+	firstNames, err := reportPostgresTables(first.view.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondNames, err := reportPostgresTables(second.view.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for _, name := range []string{firstNames.messages, firstNames.offsets} {
+		var exists bool
+		if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+name).Scan(&exists); err != nil {
+			t.Fatal(err)
+		}
+		if exists {
+			t.Fatalf("canceled run retained table %s", name)
+		}
+	}
+	var secondExists bool
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass($1) IS NOT NULL", "public."+secondNames.messages).Scan(&secondExists); err != nil {
+		t.Fatal(err)
+	}
+	if !secondExists {
+		t.Fatal("canceling first run removed another run's message table")
+	}
+	if v := awaitReport(t, second); v.Status != "Ready" || v.Attempts != 1 {
+		t.Fatalf("other isolated run failed: %+v", v)
+	}
+}
+
+func TestReportsPostgresConfigurationErrorDoesNotLeakSecrets(t *testing.T) {
+	const secret = "do-not-expose-this-password"
+	t.Setenv("REPORT_POSTGRES_DSN", "postgres://demo:"+secret+"@localhost:bad-port/demo")
+	h := testReportHub(t)
+	r, err := h.start("durable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := awaitReport(t, r)
+	if v.Status != "Error" || v.Attempts != 0 || v.CSV != "" {
+		t.Fatalf("invalid configuration unexpectedly worked: %+v", v)
+	}
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), secret) {
+		t.Fatal("configuration secret leaked into API response")
+	}
+}
+
+// Controlled callbacks test cleanup coordination, not PostgreSQL persistence.
+func TestReportDeleteRetainsFailedCleanupUntilSuccessfulRetry(t *testing.T) {
+	h := testReportHub(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	r := &reportRun{view: reportView{ID: "cleanup-retry", Status: "Error"}, ctx: ctx, cancel: cancel, done: make(chan struct{}), expiry: time.NewTimer(time.Hour)}
+	r.cleanup = func() error {
+		calls++
+		if calls == 1 {
+			return errors.New("isolated cleanup unavailable")
+		}
+		return nil
+	}
+	r.cleanupErr = errors.New("previous cleanup unavailable")
+	close(r.done)
+	h.runs[r.view.ID] = r
+	app := fiber.New()
+	h.routes(app)
+	response, err := app.Test(httptest.NewRequest("DELETE", "/api/reports/runs/cleanup-retry", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 503 || calls != 1 {
+		t.Fatalf("failed cleanup falsely acknowledged: status %d calls %d", response.StatusCode, calls)
+	}
+	h.mu.Lock()
+	retained := h.runs[r.view.ID] == r
+	h.mu.Unlock()
+	if !retained {
+		t.Fatal("cleanup failure released capacity or lost retry state")
+	}
+	response, err = app.Test(httptest.NewRequest("DELETE", "/api/reports/runs/cleanup-retry", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != 204 || calls != 2 {
+		t.Fatalf("cleanup retry did not finish: status %d calls %d", response.StatusCode, calls)
+	}
+	h.mu.Lock()
+	remaining := len(h.runs)
+	h.mu.Unlock()
+	if remaining != 0 || r.cleanup != nil {
+		t.Fatal("successful cleanup retained capacity or captured DSN callback")
+	}
+	if err := h.remove(r.view.ID); err != nil || calls != 2 {
+		t.Fatal("repeated delete was not idempotent")
+	}
+}
+
+func TestReportConcurrentCleanupRetriesSerialize(t *testing.T) {
+	h := testReportHub(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	entered, release := make(chan struct{}), make(chan struct{})
+	calls := 0
+	r := &reportRun{view: reportView{ID: "serialized-cleanup"}, ctx: ctx, cancel: cancel, done: make(chan struct{}), expiry: time.NewTimer(time.Hour)}
+	r.cleanup = func() error { calls++; close(entered); <-release; return nil }
+	r.cleanupErr = errors.New("previous cleanup unavailable")
+	close(r.done)
+	h.runs[r.view.ID] = r
+	results := make(chan error, 2)
+	go func() { results <- h.remove(r.view.ID) }()
+	<-entered
+	go func() { results <- h.remove(r.view.ID) }()
+	select {
+	case <-results:
+		t.Fatal("DELETE acknowledged cleanup before it completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+	h.mu.Lock()
+	retained := h.runs[r.view.ID] == r
+	h.mu.Unlock()
+	if !retained {
+		t.Fatal("cleanup in progress released capacity")
+	}
+	close(release)
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-results:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("serialized cleanup did not finish")
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("concurrent DELETE repeated successful cleanup %d times", calls)
 	}
 }

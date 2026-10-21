@@ -85,31 +85,31 @@ function RetryFlow({ visual, arrow }: FlowProps) {
 function DurableFlow({ visual, arrow }: FlowProps) {
   const online = visual.consumerOnline || visual.received || visual.ready
   return <>
-    <g className={`flow-station ${visual.diskRetained ? 'is-retained' : visual.published ? 'is-observed' : ''}`} data-testid="transport-node" data-transport="disk">
+    <g className={`flow-station ${visual.storedMessage ? 'is-retained' : visual.published ? 'is-observed' : ''}`} data-testid="transport-node" data-transport="postgres">
       <path className="flow-card" d="M 55 97 C 55 63 355 63 355 97 V 236 C 355 270 55 270 55 236 Z" />
-      <path className="flow-disk-top" d="M 55 97 C 55 131 355 131 355 97" />
-      <text className="flow-name" x="205" y="151">SQLite</text><text className="flow-caption" x="205" y="179">File-backed · beta</text>
-      {visual.retentionObserved && <g className="flow-retained" data-testid="disk-retention"><rect x="95" y="24" width="220" height="31" rx="15" /><text x="205" y="45">RETENTION OBSERVED</text></g>}
+      <path className="flow-database-top" d="M 55 97 C 55 131 355 131 355 97" />
+      <text className="flow-name" x="205" y="151">PostgreSQL</text><text className="flow-caption" x="205" y="179">Watermill SQL store</text>
+      {(visual.databaseClosed || visual.retentionObserved) && <g className="flow-retained" data-testid="database-retention"><rect x="95" y="24" width="220" height="31" rx="15" /><text x="205" y="45">{visual.retentionObserved ? 'RETENTION OBSERVED' : 'CONNECTIONS CLOSED'}</text></g>}
     </g>
     <path className={`flow-link ${visual.received ? 'is-observed' : ''}`} d="M 361 212 H 532" markerEnd={arrow} data-testid="receive-link" />
     <text className="flow-verb" x="447" y="186">{visual.received ? 'read saved message' : 'wait for consumer'}</text>
     <g className={`flow-station execution-${visual.executionState} ${visual.working ? 'is-working' : ''}`} data-testid="consumer-node" data-state={visual.executionState}>
       <rect className="flow-card" x="538" y="80" width="287" height="180" rx="20" />
       <text className="flow-name flow-consumer-name" x="681" y="124">Subscriber + Router</text><text className="flow-consumer-status" x="681" y="157">{visual.offline ? 'OFFLINE' : online ? 'ONLINE' : 'Not started'}</text>
-      <text className="flow-caption" x="681" y="184">{visual.ready ? 'Saved message consumed' : visual.received ? 'Saved message received' : online ? 'New subscription' : 'Starts after reopen'}</text>
+      <text className="flow-caption" x="681" y="184">{visual.ready ? 'Saved message consumed' : visual.received ? 'Saved message received' : online ? 'New subscription' : 'Starts after reconnect'}</text>
       {visual.offline && <g className="flow-offline-cross" transform="translate(681 218)"><path d="M -12 -12 L 12 12 M -12 12 L 12 -12" /></g>}
     </g>
     <MessageToken visual={visual} x={visual.token === 'consumer' ? 681 : 205} y={222} />
-    <g className="flow-disk-lifecycle" data-testid="disk-lifecycle">
-      <g className={visual.retentionObserved ? 'is-observed' : ''}><rect x="44" y="287" width="197" height="38" rx="10" /><text x="142" y="312">{visual.retentionObserved ? '✓ ' : ''}Close connections</text></g>
+    <g className="flow-database-lifecycle" data-testid="database-lifecycle">
+      <g className={visual.databaseClosed || visual.databaseReopened ? 'is-observed' : ''}><rect x="44" y="287" width="197" height="38" rx="10" /><text x="142" y="312">{visual.databaseClosed || visual.databaseReopened ? '✓ ' : ''}Close connections</text></g>
       <text className="flow-verb" x="261" y="312">→</text>
-      <g className={visual.diskReopened ? 'is-observed' : ''}><rect x="282" y="287" width="199" height="38" rx="10" /><text x="381" y="312">{visual.diskReopened ? '✓ ' : ''}Reopen same file</text></g>
+      <g className={visual.databaseReopened ? 'is-observed' : ''}><rect x="282" y="287" width="199" height="38" rx="10" /><text x="381" y="312">{visual.databaseReopened ? '✓ ' : ''}Reconnect to DB</text></g>
     </g>
     <text className="flow-context" x="681" y="312">No republish</text>
   </>
 }
 
-const titles: Record<ReportMode, string> = { publish: 'Publish a message into GoChannel', router: 'Router connects delivery to an application handler', retry: 'Retry middleware calls the same application handler', durable: 'SQLite retains a message across connection close and reopen', subscribe: 'Subscriber delivery and application receive loop' }
+const titles: Record<ReportMode, string> = { publish: 'Publish a message into GoChannel', router: 'Router connects delivery to an application handler', retry: 'Retry middleware calls the same application handler', durable: 'PostgreSQL stores a message while the Subscriber and Router are offline', subscribe: 'Subscriber delivery and application receive loop' }
 
 /** Each demo isolates one Watermill concept. The API, not a clock, moves the token. */
 export function ReportFlow({ mode, visual }: { mode: ReportMode; visual: ReportVisual }) {

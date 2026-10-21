@@ -60,17 +60,17 @@
 .watermill-deck .flow-retained text { fill: #253b1d; font-size: 15px; font-weight: 750; text-anchor: middle; letter-spacing: .5px; }
 .watermill-deck .flow-station.is-complete .flow-card, .watermill-deck .execution-complete .flow-card { stroke: #c3f294; fill: #253e28; stroke-width: 3; }
 .watermill-deck .flow-result-check { fill: #c3f294; font-size: 35px; text-anchor: middle; }
-.watermill-deck .flow-disk-top { fill: none; stroke: #90ad82; stroke-width: 2; }
+.watermill-deck .flow-database-top { fill: none; stroke: #90ad82; stroke-width: 2; }
 .watermill-deck .flow-retry > path { fill: none; stroke: #778c73; stroke-width: 2.5; stroke-dasharray: 5 6; }
 .watermill-deck .flow-retry.has-errors > path { stroke: #c88b69; }
 .watermill-deck .flow-retry.is-retrying > path { stroke: #ffb695; stroke-dasharray: none; stroke-width: 4; }
-.watermill-deck .flow-attempts rect, .watermill-deck .flow-disk-lifecycle rect { fill: #192c21; stroke: #5c7862; stroke-width: 1.5; }
-.watermill-deck .flow-attempts text, .watermill-deck .flow-disk-lifecycle text { fill: #adc1b1; text-anchor: middle; font-size: 16px; }
+.watermill-deck .flow-attempts rect, .watermill-deck .flow-database-lifecycle rect { fill: #192c21; stroke: #5c7862; stroke-width: 1.5; }
+.watermill-deck .flow-attempts text, .watermill-deck .flow-database-lifecycle text { fill: #adc1b1; text-anchor: middle; font-size: 16px; }
 .watermill-deck .flow-attempts .flow-call-label { font-size: 15px; font-weight: 600; }
 .watermill-deck .flow-attempts .attempt-error rect { fill: #4d3024; stroke: #ffb695; }
 .watermill-deck .flow-attempts .attempt-error text { fill: #ffc5a5; }
-.watermill-deck .flow-attempts .attempt-success rect, .watermill-deck .flow-attempts .attempt-running rect, .watermill-deck .flow-disk-lifecycle .is-observed rect { stroke: #c3f294; }
-.watermill-deck .flow-attempts .attempt-success text, .watermill-deck .flow-attempts .attempt-running text, .watermill-deck .flow-disk-lifecycle .is-observed text { fill: #d8efc8; }
+.watermill-deck .flow-attempts .attempt-success rect, .watermill-deck .flow-attempts .attempt-running rect, .watermill-deck .flow-database-lifecycle .is-observed rect { stroke: #c3f294; }
+.watermill-deck .flow-attempts .attempt-success text, .watermill-deck .flow-attempts .attempt-running text, .watermill-deck .flow-database-lifecycle .is-observed text { fill: #d8efc8; }
 .watermill-deck .flow-contract > path { fill: none; stroke: #8a9d83; stroke-width: 2; stroke-dasharray: 5 5; }
 .watermill-deck .flow-ack > path { fill: none; stroke: #c3f294; stroke-width: 3; }
 .watermill-deck .flow-contract-label { fill: #c7dbbd; font-size: 19px; text-anchor: middle; }

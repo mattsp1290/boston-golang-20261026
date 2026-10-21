@@ -122,27 +122,31 @@ it('shows observed error, error, success calls to one wrapped handler with one s
   expect(screen.getByTestId('message-token')).toHaveAttribute('data-location', 'handler')
 })
 
-it('shows only SQLite retention and the subscriber/router lifecycle across close, reopen and receipt', () => {
+it('shows only PostgreSQL retention and the subscriber/router lifecycle across close, reopen and receipt', () => {
   const closed = ['worker-offline', 'published', 'db-closed']
   const visual = reportVisual('durable', snapshot(closed))
   const { rerender } = render(<ReportFlow mode="durable" visual={visual} />)
   expect(visual.token).toBe('transport')
-  expect(visual.diskRetained).toBe(true)
-  expect(visual.diskClosed).toBe(true)
+  expect(visual.storedMessage).toBe(true)
+  expect(visual.databaseClosed).toBe(true)
   expect(visual.offline).toBe(true)
-  expect(screen.getByTestId('disk-retention')).toHaveTextContent('RETENTION OBSERVED')
+  expect(visual.retentionObserved).toBe(false)
+  expect(screen.getByTestId('database-retention')).toHaveTextContent('CONNECTIONS CLOSED')
   expect(screen.getByTestId('consumer-node')).toHaveTextContent('Subscriber + RouterOFFLINE')
   expect(screen.getByTestId('consumer-node')).toHaveAttribute('data-state', 'offline')
-  expect(screen.getByTestId('transport-node')).toHaveTextContent('SQLite')
-  expect(screen.getByTestId('disk-lifecycle')).toHaveTextContent('✓ Close connections→Reopen same file')
+  expect(screen.getByTestId('transport-node')).toHaveTextContent('PostgreSQL')
+  expect(screen.getByTestId('transport-node')).toHaveAttribute('data-transport', 'postgres')
+  expect(screen.getByTestId('database-lifecycle')).toHaveTextContent('✓ Close connections→Reconnect to DB')
   for (const node of ['app-node', 'handler-node', 'result-node', 'retry-wrapper']) expect(screen.queryByTestId(node)).not.toBeInTheDocument()
   expect(screen.getByRole('img')).not.toHaveTextContent(/CSV|GoChannel|Application handler/)
   const reopened = reportVisual('durable', snapshot([...closed, 'db-reopened']))
   rerender(<ReportFlow mode="durable" visual={reopened} />)
-  expect(reopened.diskClosed).toBe(false)
-  expect(reopened.diskRetained).toBe(true)
+  expect(reopened.databaseClosed).toBe(false)
+  expect(reopened.storedMessage).toBe(true)
   expect(reopened.offline).toBe(true)
-  expect(screen.getByTestId('disk-lifecycle')).toHaveTextContent('✓ Reopen same file')
+  expect(reopened.retentionObserved).toBe(false)
+  expect(screen.queryByTestId('database-retention')).not.toBeInTheDocument()
+  expect(screen.getByTestId('database-lifecycle')).toHaveTextContent('✓ Reconnect to DB')
   const online = reportVisual('durable', snapshot([...closed, 'db-reopened', 'worker-online']))
   rerender(<ReportFlow mode="durable" visual={online} />)
   expect(online.token).toBe('transport')
@@ -152,8 +156,10 @@ it('shows only SQLite retention and the subscriber/router lifecycle across close
   const received = reportVisual('durable', snapshot([...closed, 'db-reopened', 'worker-online', 'attempt'], 'Processing', 1))
   rerender(<ReportFlow mode="durable" visual={received} />)
   expect(screen.getByTestId('message-token')).toHaveAttribute('data-location', 'consumer')
-  expect(received.diskRetained).toBe(false)
+  expect(received.storedMessage).toBe(false)
   expect(received.retentionObserved).toBe(true)
+  expect(screen.getByTestId('database-retention')).toHaveTextContent('RETENTION OBSERVED')
+  expect(screen.getByTestId('message-token')).toHaveAttribute('data-message-id', 'one-stable-message')
   expect(screen.getByTestId('receive-link')).toHaveClass('is-observed')
   expect(screen.getByTestId('consumer-node')).toHaveClass('is-working')
 })
@@ -164,7 +170,7 @@ it('uses receipt evidence when the durable startup log races behind processing',
   expect(visual.offline).toBe(false)
   expect(visual.token).toBe('consumer')
   expect(visual.working).toBe(true)
-  expect(visual.diskRetained).toBe(false)
+  expect(visual.storedMessage).toBe(false)
 })
 
 it('keeps the subscribe fallback distinct and displays Ack only from an explicit event', () => {
@@ -197,4 +203,15 @@ it('freezes error evidence without inventing a successful call', () => {
   expect(screen.getByTestId('handler-node')).toHaveAttribute('data-state', 'error')
   expect(screen.getByTestId('message-token')).toHaveClass('is-paused')
   expect(container.querySelector('[data-outcome="success"]')).not.toBeInTheDocument()
+})
+
+
+it('does not claim retention from publication, closed connections, or reconnection alone', () => {
+  for (const kinds of [ ['worker-offline'], ['worker-offline', 'published'], ['worker-offline', 'published', 'db-closed'], ['worker-offline', 'published', 'db-closed', 'db-reopened'], ['worker-offline', 'published', 'db-closed', 'db-reopened', 'worker-online'] ]) {
+    const visual = reportVisual('durable', snapshot(kinds))
+    expect(visual.retentionObserved).toBe(false)
+    expect(visual.received).toBe(false)
+    expect(visual.working).toBe(false)
+    expect(visual.detail).not.toContain('retention observed')
+  }
 })

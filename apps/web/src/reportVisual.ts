@@ -23,10 +23,12 @@ export function reportVisual(mode: ReportMode, run: ReportRun | null, stopped = 
   const offline = durable && observed.has('worker-offline') && !consumerOnline && !received && !ready
   const retrying = mode === 'retry' && latestWork === 'retry' && !ready && !failed
   const working = !publication && run?.status === 'Processing' && received && !retrying && !failed && !offline
-  const diskClosed = durable && observed.has('db-closed') && !observed.has('db-reopened')
-  const diskReopened = durable && observed.has('db-reopened')
-  const diskRetained = durable && observed.has('db-closed') && !received && !ready
-  const retentionObserved = durable && observed.has('db-closed')
+  const databaseClosed = durable && observed.has('db-closed') && !observed.has('db-reopened')
+  const databaseReopened = durable && observed.has('db-reopened')
+  const storedMessage = durable && published && !received && !ready
+  // Closing a pool proves only closure. Reading the original message after a
+  // reconnect is the end-to-end evidence that the database retained it.
+  const retentionObserved = durable && databaseReopened && observed.has('db-closed') && received
   const failedAttempts: number[] = []
   let attempt = 0
   for (const event of events) {
@@ -60,8 +62,9 @@ export function reportVisual(mode: ReportMode, run: ReportRun | null, stopped = 
     if (ready) headline = `Handler succeeded after ${attempts} calls.`
   } else if (durable) {
     if (run) headline = 'Store first. Consume later.'
-    if (offline) { stage = 'Consumer offline'; headline = published ? 'On disk. Consumer still offline.' : 'No consumer has started.' }
-    if (diskRetained) { stage = 'Saved on disk'; headline = diskClosed ? 'Connections closed. Message retained.' : 'Same file reopened. Same message.' }
+    if (offline) { stage = 'Consumer offline'; headline = published ? 'Stored in PostgreSQL. Consumer offline.' : 'No consumer has started.' }
+    if (databaseClosed) { stage = 'Connections closed'; headline = 'Connections closed. Consumer still offline.' }
+    if (databaseReopened && !received) { stage = 'Database reconnected'; headline = 'Fresh connection pool. Same database.' }
     if (consumerOnline && !received) { stage = 'Consumer starts'; headline = 'Consumer online. Read the saved message.' }
     if (working) headline = 'The saved message reached the consumer.'
     if (ready) headline = 'Consumed after reopening. No republish.'
@@ -75,19 +78,20 @@ export function reportVisual(mode: ReportMode, run: ReportRun | null, stopped = 
 
   const location = {
     none: 'No message observed in this concept yet.', app: 'Accepted request at the app.',
-    transport: durable ? 'Message retained in SQLite on disk.' : available ? 'Message availability was observed in a live subscriber channel.' : 'Publication observed in GoChannel.',
+    transport: durable ? 'Message publication in PostgreSQL was observed.' : available ? 'Message availability was observed in a live subscriber channel.' : 'Publication observed in GoChannel.',
     subscriber: 'Message published; Subscriber delivery has not yet been observed.', handler: ready ? 'Application handler completed for the same message.' : 'The same message is at the application handler.',
     consumer: 'The saved message reached the consumer.',
   }[token]
   const detail = [location,
     working ? `Application handler call ${attempts} is processing.` : retrying ? `Call ${attempts} failed; waiting for the next call to the same handler.` : '',
     offline ? 'Consumer offline; no receipt or startup event yet.' : '',
-    retentionObserved ? 'Database connections closed and the message persisted.' : '',
-    diskReopened ? 'The same SQLite file was reopened.' : '',
-    !publication ? acknowledged ? 'Explicit Ack event observed.' : 'No explicit Ack event observed; the Router acknowledgement contract is not a measured event.' : 'GoChannel requires a live subscription and does not retain messages for offline subscribers.',
+    databaseClosed ? 'This run’s database connection pool is closed; receipt after reconnect has not been observed yet.' : '',
+    retentionObserved ? 'The original message was received after closing and reopening the database connections; retention observed.' : '',
+    databaseReopened ? 'A fresh pool reconnected to the same PostgreSQL database.' : '',
+    !publication ? acknowledged ? 'Explicit Ack event observed.' : 'No explicit Ack event observed; the Router acknowledgement contract is not a measured event.' : 'This GoChannel configuration requires a live subscription and does not retain messages for offline subscribers.',
     failed ? 'Automatic replay paused.' : '',
   ].filter(Boolean).join(' ')
-  return { stage, headline, detail, token, messageId: run?.messageId, transport: durable ? 'disk' as const : 'memory' as const, published, available, received, acknowledged, ready, complete, failed, working, consumerOnline, executionState, offline, diskRetained, diskClosed, diskReopened, retentionObserved, retrying, attempts, failedAttempts }
+  return { stage, headline, detail, token, messageId: run?.messageId, transport: durable ? 'postgres' as const : 'memory' as const, published, available, received, acknowledged, ready, complete, failed, working, consumerOnline, executionState, offline, storedMessage, databaseClosed, databaseReopened, retentionObserved, retrying, attempts, failedAttempts }
 }
 
 export type ReportVisual = ReturnType<typeof reportVisual>
