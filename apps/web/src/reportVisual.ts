@@ -62,11 +62,11 @@ export function reportVisual(mode: ReportMode, run: ReportRun | null, stopped = 
     if (ready) headline = `Handler succeeded after ${attempts} calls.`
   } else if (durable) {
     if (run) headline = 'Store first. Consume later.'
-    if (offline) { stage = 'Consumer offline'; headline = published ? 'Stored in PostgreSQL. Consumer offline.' : 'No consumer has started.' }
-    if (databaseClosed) { stage = 'Connections closed'; headline = 'Connections closed. Consumer still offline.' }
+    if (offline) { stage = 'Not started'; headline = published ? 'Stored in PostgreSQL. Subscriber and Router not started.' : 'Subscriber and Router have not started.' }
+    if (databaseClosed) { stage = 'Connections closed'; headline = 'Connections closed. Subscriber and Router not started.' }
     if (databaseReopened && !received) { stage = 'Database reconnected'; headline = 'Fresh connection pool. Same database.' }
-    if (consumerOnline && !received) { stage = 'Consumer starts'; headline = 'Consumer online. Read the saved message.' }
-    if (working) headline = 'The saved message reached the consumer.'
+    if (consumerOnline && !received) { stage = 'Subscriber + Router starts'; headline = 'Subscriber and Router started. Read the saved message.' }
+    if (working) headline = 'The saved message reached the Subscriber and Router.'
     if (ready) headline = 'Consumed after reopening. No republish.'
   } else {
     if (run) headline = 'Subscriber delivers. Your handler runs.'
@@ -80,11 +80,11 @@ export function reportVisual(mode: ReportMode, run: ReportRun | null, stopped = 
     none: 'No message observed in this concept yet.', app: 'Accepted request at the app.',
     transport: durable ? 'Message publication in PostgreSQL was observed.' : available ? 'Message availability was observed in a live subscriber channel.' : 'Publication observed in GoChannel.',
     subscriber: 'Message published; Subscriber delivery has not yet been observed.', handler: ready ? 'Application handler completed for the same message.' : 'The same message is at the application handler.',
-    consumer: 'The saved message reached the consumer.',
+    consumer: 'The saved message reached the Subscriber and Router.',
   }[token]
   const detail = [location,
     working ? `Application handler call ${attempts} is processing.` : retrying ? `Call ${attempts} failed; waiting for the next call to the same handler.` : '',
-    offline ? 'Consumer offline; no receipt or startup event yet.' : '',
+    offline ? 'The Subscriber and Router have not started; no receipt or startup event yet.' : '',
     databaseClosed ? 'This run’s database connection pool is closed; receipt after reconnect has not been observed yet.' : '',
     retentionObserved ? 'The original message was received after closing and reopening the database connections; retention observed.' : '',
     databaseReopened ? 'A fresh pool reconnected to the same PostgreSQL database.' : '',

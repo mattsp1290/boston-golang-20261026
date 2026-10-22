@@ -1,6 +1,6 @@
 # Boston Golang · October 26, 2026
 
-A twelve-slide Watermill talk by Matt Spurlin, Senior Software Engineer at Datadog. React + the official reveal.js React integration renders the slides; Go/Fiber runs real background report workers.
+A fourteen-slide Watermill talk by Matt Spurlin, Senior Software Engineer at Datadog. React + the official reveal.js React integration renders the slides; Go/Fiber runs real background report workers.
 
 ## Run the talk
 
@@ -59,7 +59,7 @@ The title, speaker bio, and roadmap follow Watermill's **Publish → Handle → 
 
 “Worker” means an application process running subscriber/Router/handler code, not a separate Watermill primitive or a synonym for Subscriber. The main teaching diagrams name the concrete roles instead.
 
-Every demo starts automatically when its slide becomes active and repeats while that slide stays active. Each diagram focuses only on its chapter: publication, handling, a middleware wrapper, or durable storage. One identifiable message changes state based on observed server events. Retry stays at the same handler; the PostgreSQL scene keeps the message in the database before its Subscriber and Router start. An acknowledgement is shown only when the API reports the explicit Ack call. Short labels accompany the icons; code, full IDs, the CSV preview and the event log are secondary. Motion illustrates observed snapshots rather than measured transit time. Reduced-motion preferences preserve the same states without travel, spin or pulse animations. After Published or Ready, the finished result stays visible during a four-second countdown. The next cycle starts only after successful backend cleanup. A shared client-side start gate serializes canceled requests and late responses across navigation, overview and React remounts. Leaving the slide, opening overview, or unmounting stops polling/countdowns and cancels work. API or cleanup errors stop automatic cycling rather than creating a retry storm; server expiry remains a fallback for disconnected browsers. If creation has an unknown outcome and no usable run ID, the deck blocks further starts and asks you to wait 90 seconds before reloading. If an ID is known but cleanup fails, Try again retries cleanup before allowing a new run.
+Every demo starts automatically when its slide becomes active and repeats while that slide stays active. Each diagram focuses only on its chapter: publication, handling, a middleware wrapper, or durable storage. One identifiable message changes state based on observed server events. Retry stays at the same handler; the PostgreSQL scene keeps the message in the database before its Subscriber and Router start. An acknowledgement is shown only when the API reports the explicit Ack call. The projected stage contains only the focused diagram, observed state, and short labels. Code lives on separate explanation slides; full IDs remain available to assistive technology, and the Handle result uses the actual CSV. Detailed guarantees and source links are in speaker notes, not dashboard panels. Motion illustrates observed snapshots rather than measured transit time. Reduced-motion preferences preserve the same states without travel, spin or pulse animations. After Published or Ready, the finished result stays visible during a four-second countdown. The next cycle starts only after successful backend cleanup. A shared client-side start gate serializes canceled requests and late responses across navigation, overview and React remounts. Leaving the slide, opening overview, or unmounting stops polling/countdowns and cancels work. API or cleanup errors stop automatic cycling rather than creating a retry storm; server expiry remains a fallback for disconnected browsers. If creation has an unknown outcome and no usable run ID, the deck blocks further starts and asks you to wait 90 seconds before reloading. If an ID is known but cleanup fails, Try again retries cleanup before allowing a new run.
 
 ### What the durability demo proves (and does not)
 
@@ -71,7 +71,7 @@ The handling, middleware and durable demos generate deterministic synthetic rows
 
 ## Implementation map
 
-- `apps/web/src/App.tsx`: twelve-slide deck, notes, source excerpts.
+- `apps/web/src/App.tsx`: fourteen-slide deck, notes, source excerpts.
 - `apps/web/src/`: report UI, polling and reveal lifecycle tests.
 - `apps/api/internal/server/reports.go`: Watermill publication, Router, Retry, PostgreSQL lifecycle, cancellation and routes. The snippets on slides are extracted from this actual source using `demo:*` markers.
 - `apps/api/internal/server/reports_test.go`: real API/worker integration tests, retries, lifecycle and persistent queue behavior.
@@ -105,7 +105,7 @@ npm run test:api
 
 From `apps/api`, `go test -race ./...` runs backend checks. Real PostgreSQL integration tests require `TEST_REPORT_POSTGRES_DSN` pointing to a dedicated demo/test database; they explicitly skip when it is absent. For example, export that variable in your shell and run the same command. Use `go test -race -v ./...` to see individual integration skips; a default `npm run check` without this variable is not proof that database integration ran. Use `gofmt -w apps/api` after Go edits. Dependency versions are pinned in npm's lockfile and Go module sums.
 
-Manual rehearsal: visit all four live slides, verify the stable message ID, publication-only Published state without CSV, three handler attempts, retained/offline PostgreSQL stage, and the Handle demo’s Ready CSV. Leave during Processing, return, toggle overview, observe multiple countdown/replay cycles, and stop the API to verify the visible error state. The flow should never invent successful progress if the API fails.
+Manual rehearsal: visit all four live slides, verify the stable message identity through accessible descriptions or API snapshots, publication-only Published state without CSV, three handler attempts, stored/not-started PostgreSQL stage, and the Handle demo’s Ready CSV. Leave during Processing, return, toggle overview, observe multiple countdown/replay cycles, and stop the API to verify the visible error state. The flow should never invent successful progress if the API fails.
 
 ## Official references
 
@@ -118,3 +118,7 @@ Manual rehearsal: visit all four live slides, verify the stable message ID, publ
 - [Official SQL adapter source](https://github.com/ThreeDotsLabs/watermill-sql)
 
 The official Watermill SQL adapter and PostgreSQL driver versions are pinned in `go.mod`/`go.sum`. Publisher shutdown and database connection shutdown are separate operations; the demo closes both before reconnecting.
+
+### Projected-stage design
+
+The deck uses a fixed 1920 × 1080 canvas, uniformly scaled by Reveal for 16:9 displays and letterboxed on 4:3 screens. It does not reflow into stacked website cards. Titles use 86 px design type and code uses 36 px, equivalent to approximately 57 px and 24 px at 1280 × 720. The approved slide-by-slide plan is in `docs/presentation-redesign-plan.md`.

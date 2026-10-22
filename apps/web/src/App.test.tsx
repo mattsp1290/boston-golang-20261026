@@ -10,87 +10,122 @@ import { fileURLToPath } from 'node:url'
 const appStyles = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'App.css'), 'utf8')
 
 beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) { return Number.parseFloat(this.style.width) || 1280 })
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) { return Number.parseFloat(this.style.height) || 720 })
   window.location.hash = ''
   vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }))
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
 })
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.location.hash = '' })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.location.hash = '' })
 
-it('teaches Publish, Handle, and Middleware through explanation/demo pairs with a delivery bridge', async () => {
+it('presents fourteen minimal slides with source lessons before each live scene', async () => {
   const { container } = render(<App />)
   await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
-  expect(container.querySelectorAll('.slides > section')).toHaveLength(12)
+  expect([...container.querySelectorAll('.slides > section')].map(slide => slide.id)).toEqual([
+    'title', 'speaker', 'watermill', 'lesson-publish', 'report-publish', 'lesson-subscriber',
+    'lesson-receive', 'lesson-handle', 'report-router', 'lesson-middleware', 'report-retry',
+    'lesson-durable', 'report-durable', 'closing',
+  ])
   expect(container.querySelector('#title')).toHaveClass('present')
   expect(screen.getByRole('heading', { name: 'Watermill.' })).toBeInTheDocument()
   expect(container.querySelector('#speaker')).toHaveTextContent('Matt Spurlin')
-  expect(container.querySelector('#speaker')).toHaveTextContent('Senior Software Engineerat Datadog')
+  expect(container.querySelector('#speaker')).toHaveTextContent('Senior Software EngineerDatadog')
   expect(container.querySelector('#speaker a')).toHaveAttribute('href', 'https://github.com/mattsp1290')
-  expect([...container.querySelectorAll('#watermill .concepts h3')].map(item => item.textContent)).toEqual(['Publish', 'Handle', 'Middleware'])
-  expect([...container.querySelectorAll('.slides > section')].map(slide => slide.id)).toEqual([
-    'title', 'speaker', 'watermill', 'lesson-publish', 'report-publish', 'lesson-subscriber',
-    'lesson-handle', 'report-router', 'lesson-middleware', 'report-retry', 'lesson-durable', 'report-durable',
-  ])
+  expect([...container.querySelectorAll('#watermill .concept-path span')].map(item => item.textContent)).toEqual(['Publish', 'Handle', 'Middleware.'])
+  expect(container.querySelector('#watermill')).toHaveTextContent('A Go library, not a broker.')
+  expect(container.querySelector('#closing')).toHaveTextContent('Publish.Handle.Extend.')
+  expect(container.querySelector('#closing a')).toHaveAttribute('href', 'https://watermill.io')
+  expect(container.querySelectorAll('.slide-header, .slide-footer, .lesson-node, .lesson-takeaway')).toHaveLength(0)
+  expect(container.querySelectorAll('.controls[style*="display: block"], .progress[style*="display: block"]')).toHaveLength(0)
   expect(container.querySelector('#report-subscribe')).not.toBeInTheDocument()
-  expect(container.querySelector('#lesson-publish')).toHaveTextContent('Published ≠ processed.')
-  expect(container.querySelector('#report-publish')).toHaveTextContent('No handler runs and no CSV is generated')
-  expect(container.querySelector('#report-publish')).toHaveAttribute('data-notes', expect.stringContaining('does not prove offline retention'))
-  expect(container.querySelector('#lesson-subscriber')).toHaveTextContent('Subscriber is a transport adapter')
-  expect(container.querySelector('#lesson-subscriber')).toHaveTextContent('bus is a GoChannel instance')
-  const subscriberSource = container.querySelector('[aria-label="Actual Go subscribe implementation"]')
-  expect(subscriberSource).toHaveTextContent('.Subscribe(')
-  expect(subscriberSource).toHaveTextContent('ctx.Done()')
-  expect(subscriberSource).toHaveTextContent('.Ack()')
-  expect(subscriberSource).toHaveTextContent('.Nack()')
-  expect(subscriberSource).toHaveTextContent('if !ok')
-  expect(subscriberSource).toHaveTextContent('publisher and demo staging')
-  expect(subscriberSource?.querySelectorAll('.lesson-code-line').length).toBeLessThanOrEqual(12)
-  expect(container.querySelector('#lesson-handle')).toHaveTextContent('handler is your application function')
-  expect(container.querySelector('#lesson-handle')).toHaveTextContent('Router calls Ack()')
-  expect(container.querySelector('#lesson-handle')).toHaveTextContent('Router calls Nack()')
-  expect(container.querySelector('[aria-label="Actual Go router implementation"]')).toHaveTextContent('AddConsumerHandler')
-  expect(container.querySelector('[aria-label="Actual Go router implementation"]')).toHaveTextContent('demo completion signal')
-  expect(container.querySelector('#lesson-middleware')).toHaveTextContent('One message. Three handler calls.')
-  expect(container.querySelector('#report-retry')).toHaveTextContent('Finish on attempt three.')
-  expect(container.querySelector('#report-durable')).toHaveTextContent('PostgreSQL')
-  const transportLesson = container.querySelector('#lesson-durable')!
-  expect(transportLesson.querySelectorAll('pre')).toHaveLength(1)
-  expect(transportLesson.querySelector('.transport-comparison')).not.toBeInTheDocument()
-  expect(transportLesson.querySelector('.lesson-takeaway')).not.toBeInTheDocument()
-  const diff = container.querySelector('[aria-label="GoChannel to PostgreSQL code diff"]')!
-  expect(diff).toHaveTextContent('- bus := gochannel.NewGoChannel')
-  expect(diff).toHaveTextContent('- pub := message.Publisher(bus)')
-  expect(diff).toHaveTextContent('- sub = bus')
-  expect(diff).toHaveTextContent('+ pub, err := wmsql.NewPublisher(')
-  expect(diff).toHaveTextContent('+ sub, err = wmsql.NewSubscriber(')
-  expect(diff).toHaveTextContent('SchemaAdapter: schema, OffsetsAdapter: offsets')
-  expect(diff).toHaveTextContent('Same application handler: r.process(msg)')
-  expect(diff.querySelectorAll('.is-removed')).toHaveLength(3)
-  expect(diff.querySelectorAll('.is-added')).toHaveLength(11)
-  expect(diff.querySelectorAll('.transport-diff-line')).toHaveLength(15)
-  expect(diff.textContent?.endsWith('\n')).toBe(false)
-  expect(Math.max(...diff.textContent!.split('\n').map(line => line.length))).toBeLessThanOrEqual(70)
-  expect(appStyles).toContain('font-size: 20px; line-height: 1.2; padding: 12px 20px;')
-  expect(appStyles).toContain('overflow-x: auto; white-space: pre;')
-  expect(transportLesson).toHaveTextContent('Setup omitted:')
-  expect(transportLesson).toHaveAttribute('data-notes', expect.stringContaining('DefaultPostgreSQLSchema'))
-  expect(transportLesson.querySelector('a')).toHaveAttribute('href', 'https://watermill.io/pubsubs/sql/')
-  const durableSource = container.querySelector('[aria-label="Actual Go durable implementation"]')
-  expect(durableSource).toHaveTextContent('pub.Close()')
-  expect(durableSource).toHaveTextContent('db.Close()')
-  expect(durableSource).toHaveTextContent('openReportDB(r.ctx, dsn)')
-  expect(durableSource).toHaveTextContent('r.routed(sub, nil)')
-  expect(durableSource).not.toHaveTextContent('.Publish(')
-  expect(durableSource?.querySelectorAll('.report-code-line').length).toBeLessThanOrEqual(18)
-  expect(container.querySelector('#lesson-durable')).not.toHaveTextContent(/SQLite|beta/i)
-  expect(container.querySelector('#report-durable')).not.toHaveTextContent(/SQLite|beta/i)
-  expect(container.querySelector('#report-durable')).toHaveAttribute('data-notes', expect.stringContaining('not a process crash'))
   for (const slide of container.querySelectorAll('.lesson-slide')) {
-    expect(slide.querySelector('a')).toHaveAttribute('href', expect.stringMatching(/^https:\/\/watermill.io\//))
+    expect(slide.querySelectorAll('pre')).toHaveLength(1)
     expect(slide.querySelector('.report-live')).not.toBeInTheDocument()
+    expect(slide.parentElement).toHaveAttribute('data-notes', expect.stringContaining('https://watermill.io/'))
+    expect(slide.querySelector('h2')!.textContent!.split(/\s+/).length).toBeLessThanOrEqual(7)
+  }
+  for (const source of container.querySelectorAll('.lesson-source')) {
+    const lines = source.textContent!.replaceAll('\t', '  ').split('\n')
+    expect(lines.length).toBeLessThanOrEqual(14)
+    expect(Math.max(...lines.map(line => line.length))).toBeLessThanOrEqual(70)
+    expect(source.textContent?.endsWith('\n')).toBe(false)
   }
 }, 15_000)
 
-it.each(['lesson-publish', 'lesson-subscriber', 'lesson-handle', 'lesson-middleware', 'lesson-durable'])('never starts a live run on the %s explanation slide', async id => {
+it('keeps the continued Subscribe example safe and attributes acknowledgement to its owner', () => {
+  const { container } = render(<App />)
+  const publish = container.querySelector('[aria-label="Actual Go publish implementation"]')!
+  expect(publish).toHaveTextContent('message.NewMessage(')
+  expect(publish).toHaveTextContent('pub.Publish(r.topic(), msg)')
+  expect(publish.textContent!.split('\n')).toHaveLength(6)
+  expect(container.querySelector('#lesson-publish')).toHaveTextContent('Published ≠ processed')
+  const subscribe = container.querySelector('[aria-label="Actual Go Subscribe call"]')!
+  expect(subscribe).toHaveTextContent('incoming, err := bus.Subscribe(r.ctx, reportTopic)')
+  expect(subscribe).toHaveTextContent('if err != nil')
+  expect(subscribe.textContent!.split('\n')).toHaveLength(4)
+  const receive = container.querySelector('[aria-label="Actual Go receive implementation, continued"]')!
+  expect(receive).toHaveTextContent('case <-r.ctx.Done():')
+  expect(receive).toHaveTextContent('case msg, ok := <-incoming:')
+  expect(receive).toHaveTextContent('if !ok')
+  expect(receive).toHaveTextContent('r.process(msg)')
+  expect(receive).toHaveTextContent('msg.Nack()')
+  expect(receive).toHaveTextContent('msg.Ack()')
+  expect(receive).toHaveTextContent('publish to GoChannel before receiving')
+  expect(receive).toHaveTextContent('demo telemetry')
+  expect(receive.textContent!.split('\n')).toHaveLength(14)
+  expect(container.querySelector('#lesson-receive')).toHaveAttribute('data-notes', expect.stringContaining('one finite receive'))
+  expect(container.querySelector('#lesson-subscriber')).toHaveAttribute('data-notes', expect.stringContaining('shared GoChannel Publisher/Subscriber adapter'))
+  const router = container.querySelector('[aria-label="Actual Go router implementation"]')!
+  expect(router).toHaveTextContent('router.AddConsumerHandler(')
+  expect(router).toHaveTextContent('r.process(msg)')
+  expect(router).toHaveTextContent('demo completion signal')
+  expect(router.textContent!.split('\n').length).toBeLessThanOrEqual(8)
+  expect(container.querySelector('#lesson-handle')).toHaveTextContent('Router: nil → Ack')
+  expect(container.querySelector('#lesson-handle')).toHaveTextContent('Router: error → Nack')
+  expect(container.querySelector('#lesson-middleware')).toHaveTextContent('One message. Three calls.')
+  expect(container.querySelector('#lesson-middleware .lesson-attempts')).not.toBeInTheDocument()
+  expect(container.querySelector('[aria-label="Actual Go Retry middleware"]')).toHaveTextContent('MaxRetries: 2')
+})
+
+it('compares both transport interfaces in a single fourteen-line diff without changing the handler', () => {
+  const { container } = render(<App />)
+  const diff = container.querySelector('[aria-label="GoChannel to PostgreSQL code diff"]')!
+  expect(diff).toHaveTextContent('- bus := gochannel.NewGoChannel')
+  expect(diff).toHaveTextContent('- pub := message.Publisher(bus)')
+  expect(diff).toHaveTextContent('- sub = bus // shared Publisher + Subscriber')
+  expect(diff).toHaveTextContent('+ pub, err := wmsql.NewPublisher(')
+  expect(diff).toHaveTextContent('+ sub, err = wmsql.NewSubscriber(')
+  expect(diff).toHaveTextContent('SchemaAdapter: schema')
+  expect(diff).toHaveTextContent('OffsetsAdapter: offsets, ConsumerGroup: "report-worker"')
+  expect(diff).toHaveTextContent('Same application handler: r.process(msg)')
+  expect(diff.querySelectorAll('.is-removed')).toHaveLength(3)
+  expect(diff.querySelectorAll('.is-added')).toHaveLength(10)
+  expect(diff.querySelectorAll('.transport-diff-line')).toHaveLength(14)
+  expect(container.querySelector('#lesson-durable')).toHaveTextContent('Illustrative configuration; setup omitted.')
+  expect(container.querySelector('#lesson-durable')).toHaveAttribute('data-notes', expect.stringContaining('DefaultPostgreSQLSchema'))
+  expect(container.querySelector('#lesson-durable')).toHaveAttribute('data-notes', expect.stringContaining("not the live demo's temporal order"))
+  expect(container.querySelector('#report-publish')).toHaveAttribute('data-notes', expect.stringContaining('does not prove offline retention'))
+  expect(container.querySelector('#report-durable')).toHaveAttribute('data-notes', expect.stringContaining('not a process crash'))
+})
+
+it('uses one proportionally scaled 1920 by 1080 stage rather than responsive webpage reflow', async () => {
+  const { container } = render(<App />)
+  await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
+  const stage = container.querySelector('.slides') as HTMLElement
+  expect(stage.style.width).toBe('1920px')
+  expect(stage.style.height).toBe('1080px')
+  expect(stage.style.transform).toContain('scale(')
+  expect(appStyles).toContain('padding: 90px 120px;')
+  expect(appStyles).toContain('top: 260px; width: 1680px; height: 630px;')
+  expect(appStyles).toContain('font: 36px/1.2')
+  expect(appStyles).toContain('transition-duration: 250ms;')
+  expect(appStyles).toContain('@media (prefers-reduced-motion: reduce)')
+  expect(appStyles).not.toMatch(/@media[^{}]*(max-width|min-width|max-height|min-height)/)
+  expect(appStyles).not.toContain('overflow-y: auto')
+  expect(appStyles).not.toContain('overflow-x: auto')
+})
+
+it.each(['lesson-publish', 'lesson-subscriber', 'lesson-receive', 'lesson-handle', 'lesson-middleware', 'lesson-durable', 'closing'])('never starts a live run on the %s explanation slide', async id => {
   window.location.hash = `#/${id}`
   const fetch = vi.fn()
   vi.stubGlobal('fetch', fetch)
@@ -99,13 +134,13 @@ it.each(['lesson-publish', 'lesson-subscriber', 'lesson-handle', 'lesson-middlew
   expect(fetch).not.toHaveBeenCalled()
 })
 
-it('moves forward and back with native controls and updates the hash', async () => {
+it('moves forward and back with keyboard navigation and updates the hash', async () => {
   const { container } = render(<App />)
   await waitFor(() => expect(container.querySelector('.reveal')).toHaveClass('ready'), { timeout: 5000 })
-  fireEvent.click(screen.getByRole('button', { name: 'next slide' }))
+  fireEvent.keyDown(document, { key: 'ArrowRight', keyCode: 39, which: 39 })
   await waitFor(() => expect(container.querySelector('#speaker')).toHaveClass('present'))
   await waitFor(() => expect(window.location.hash).toContain('speaker'), { timeout: 3000 })
-  fireEvent.click(screen.getByRole('button', { name: 'previous slide' }))
+  fireEvent.keyDown(document, { key: 'ArrowLeft', keyCode: 37, which: 37 })
   await waitFor(() => expect(container.querySelector('#title')).toHaveClass('present'))
 })
 
@@ -175,7 +210,7 @@ it('starts only active live slides and stops for explanation slides, overview, a
   const { container, unmount } = render(<App />)
   const deck = container.querySelector('.reveal')!
   const move = async (direction: 'next' | 'previous', id: string) => {
-    fireEvent.click(screen.getByRole('button', { name: `${direction} slide` }))
+    fireEvent.keyDown(document, direction === 'next' ? { key: 'ArrowRight', keyCode: 39, which: 39 } : { key: 'ArrowLeft', keyCode: 37, which: 37 })
     await waitFor(() => expect(container.querySelector(`#${id}`)).toHaveClass('present'))
   }
   await waitFor(() => expect(container.querySelector('#report-router')).toHaveClass('present'), { timeout: 5000 })
@@ -211,6 +246,8 @@ it('starts only active live slides and stops for explanation slides, overview, a
   await waitFor(() => expect(sequence).toBe(4))
   await move('previous', 'lesson-handle')
   await waitFor(() => expect(deleted(4)).toBe(true))
+  await move('previous', 'lesson-receive')
+  expect(sequence).toBe(4)
   await move('previous', 'lesson-subscriber')
   expect(sequence).toBe(4)
   expect(activeRuns.size).toBe(0)
