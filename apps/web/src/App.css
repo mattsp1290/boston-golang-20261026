@@ -1,37 +1,91 @@
-.watermill-deck { --accent: #c3f294; --muted: #a8bdb0; --line: #344b3f; background: #101b18; color: #edf5ef; font-family: inherit; }
-.watermill-deck .slides { width: 100%; height: 100%; inset: 0; text-align: left; }
-.watermill-deck .slides > section { width: 100%; height: 100%; padding: 0; overflow-y: auto; }
-.watermill-deck .slide-content { min-height: 100%; padding: clamp(24px, 4vw, 64px) clamp(24px, 6vw, 100px) 72px; display: flex; flex-direction: column; gap: 24px; }
-.watermill-deck .slide-header, .watermill-deck .slide-footer { display: flex; justify-content: space-between; gap: 20px; font-size: clamp(10px, 1vw, 14px); font-weight: 650; letter-spacing: .13em; line-height: 1.5; }
-.watermill-deck .slide-header { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-.watermill-deck .slide-header span:last-child, .watermill-deck .slide-footer { color: var(--muted); }
-.watermill-deck .slide-footer { margin-top: auto; padding-top: 18px; }
-.watermill-deck .title-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 24px 0; }
-.watermill-deck .eyebrow { color: var(--accent); font-size: clamp(11px, 1.1vw, 16px); font-weight: 650; letter-spacing: .19em; margin: 0 0 24px; }
+/* Every dimension is in design-stage pixels. Reveal alone scales this 16:9
+   composition, including on phones and 4:3 projectors. No responsive reflow. */
+.watermill-deck {
+  --accent: #c3f294;
+  --muted: #a9b5ad;
+  --line: #536259;
+  --ink: #111a16;
+  --paper: #f4f1e8;
+  --coral: #f3a48e;
+  background: #080d0a;
+  color: var(--paper);
+  font-family: inherit;
+  overflow: hidden;
+}
+.watermill-deck .slides { text-align: left; }
+.watermill-deck .slides > section {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  background: var(--ink);
+  transition-duration: 250ms;
+}
+.watermill-deck .slide-content {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  padding: 90px 120px;
+  overflow: hidden;
+}
 .watermill-deck h1, .watermill-deck h2, .watermill-deck h3, .watermill-deck p { margin: 0; }
-.watermill-deck h1 { font-size: clamp(64px, 13vw, 190px); font-weight: 600; line-height: .98; letter-spacing: -.07em; }
-.watermill-deck .title-dot, .watermill-deck .accent { color: var(--accent); }
-.watermill-deck .subtitle { color: var(--muted); font-size: clamp(24px, 3vw, 44px); line-height: 1.3; margin-top: 28px; letter-spacing: -.025em; }
-.watermill-deck .title-flow { display: flex; align-items: center; width: min(350px, 60vw); margin-top: 40px; }
-.watermill-deck .title-flow span { width: 16px; height: 16px; border: 2px solid var(--accent); border-radius: 4px; }
-.watermill-deck .title-flow span:last-child { background: var(--accent); }
-.watermill-deck .title-flow i { height: 1px; background: var(--line); flex: 1; }
-.watermill-deck .navigation-hint { letter-spacing: 0; font-weight: 400; }
-.watermill-deck .speaker-body { flex: 1; display: grid; grid-template-columns: .8fr 1.2fr; gap: 9%; align-items: center; padding: 26px 0; }
-.watermill-deck .initials { aspect-ratio: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; border-radius: 24px; background: var(--accent); color: #183323; font-size: clamp(64px, 11vw, 150px); letter-spacing: -.08em; font-weight: 600; }
-.watermill-deck .initials span { font-size: clamp(9px, 1vw, 14px); font-weight: 650; letter-spacing: .2em; margin-top: 20px; }
-.watermill-deck h2 { font-size: clamp(36px, 6vw, 86px); line-height: 1.05; letter-spacing: -.055em; font-weight: 550; }
-.watermill-deck .surname { display: block; }
-.watermill-deck .speaker-role { font-size: clamp(20px, 2.5vw, 36px); line-height: 1.4; margin: 24px 0; }.watermill-deck .speaker-role span { color: var(--muted); }
-.watermill-deck a { color: var(--accent); text-decoration: none; }.watermill-deck a:hover { text-decoration: underline; }.watermill-deck .github-link { font-size: clamp(14px, 1.5vw, 22px); }
-.watermill-deck .intro-body { flex: 1; display: flex; flex-direction: column; justify-content: center; }.watermill-deck .intro-body .eyebrow { margin-bottom: 14px; }.watermill-deck .intro-body h2 { font-size: clamp(34px, 4.8vw, 68px); }
-.watermill-deck .intro-description { font-size: clamp(16px, 1.7vw, 24px); color: var(--muted); line-height: 1.45; max-width: 900px; margin-top: 20px; }
-.watermill-deck .concepts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 32px 0 24px; padding: 0; list-style: none; }
-.watermill-deck .concepts li { border-top: 1px solid var(--line); padding-top: 18px; }.watermill-deck .concept-number { color: var(--accent); font: 13px ui-monospace, monospace; }
-.watermill-deck h3 { font-size: clamp(19px, 1.9vw, 27px); font-weight: 550; letter-spacing: -.025em; margin: 12px 0; }.watermill-deck .concepts p { font-size: clamp(15px, 1.4vw, 20px); color: var(--muted); line-height: 1.5; }
-.watermill-deck .transport-line { display: flex; gap: 24px; align-items: center; padding: 18px 22px; background: #1a2b22; border-radius: 9px; }.watermill-deck .transport-line > span { color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .12em; }.watermill-deck .transport-line p { font-size: clamp(14px, 1.4vw, 20px); }.watermill-deck .transport-line b { color: #6d8c79; margin: 0 8px; }
-.watermill-deck .controls { color: var(--accent); bottom: 12px; right: 22px; }.watermill-deck .progress { color: var(--accent); height: 4px; }.watermill-deck .slide-number { right: auto; left: 24px; bottom: 20px; color: var(--muted); background: transparent; font: 13px ui-monospace, monospace; }
-@media (max-width: 700px) { .watermill-deck .slide-content { padding: 24px 24px 76px; gap: 18px; }.watermill-deck .speaker-body { grid-template-columns: 1fr; gap: 26px; padding: 10px 0; }.watermill-deck .initials { width: 150px; border-radius: 16px; font-size: 64px; }.watermill-deck .initials span { margin-top: 12px; }.watermill-deck .surname { display: inline; }.watermill-deck .speaker-role { margin: 18px 0; }.watermill-deck .slide-footer { flex-wrap: wrap; font-size: 10px; }.watermill-deck .concepts { grid-template-columns: 1fr; gap: 16px; margin-top: 24px; }.watermill-deck .concepts li { padding-top: 10px; }.watermill-deck .concept-number { float: left; padding-top: 4px; }.watermill-deck h3 { margin: 0 0 8px 30px; }.watermill-deck .transport-line { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px; }.watermill-deck .transport-line b { margin: 0 3px; }.watermill-deck .intro-description { margin-top: 16px; }.watermill-deck .intro-body { justify-content: flex-start; }.watermill-deck .navigation-hint { font-size: 11px; } }
-@media (prefers-reduced-motion: reduce) { .watermill-deck .slides section { transition: none !important; } }
+.watermill-deck h2 {
+  font-size: 86px;
+  font-weight: 550;
+  line-height: 1.12;
+  letter-spacing: -.045em;
+}
+.watermill-deck .accent { color: var(--accent); }
+.watermill-deck a { color: var(--accent); text-decoration: none; }
+.watermill-deck a:hover { text-decoration: underline; }
+.watermill-deck .title-body { position: absolute; top: 345px; left: 120px; }
+.watermill-deck h1 { font-size: 238px; font-weight: 580; line-height: 1; letter-spacing: -.075em; }
+.watermill-deck .subtitle { color: var(--muted); font-size: 46px; line-height: 1.3; margin-top: 42px; letter-spacing: -.025em; }
+.watermill-deck .presenter-name { position: absolute; left: 120px; bottom: 90px; font-size: 42px; line-height: 1.2; }
+.watermill-deck .message-motif { position: absolute; top: 425px; right: 146px; width: 120px; height: 84px; fill: none; stroke: var(--accent); stroke-width: 2; }
+.watermill-deck .speaker-details { position: absolute; left: 120px; top: 315px; }
+.watermill-deck .speaker-details h2 { font-size: 120px; }
+.watermill-deck .speaker-role { font-size: 46px; line-height: 1.4; margin: 56px 0 44px; }
+.watermill-deck .speaker-role span { color: var(--muted); }
+.watermill-deck .github-link { font-size: 42px; line-height: 1.2; }
+.watermill-deck .initials { position: absolute; top: 273px; right: 150px; color: var(--accent); font-size: 360px; font-weight: 600; letter-spacing: -.09em; line-height: 1; }
+.watermill-deck .concept-path { display: flex; align-items: center; justify-content: space-between; position: absolute; left: 120px; top: 408px; width: 1680px; font-size: 106px; letter-spacing: -.055em; }
+.watermill-deck .concept-path b { color: var(--accent); font-size: 70px; font-weight: 300; }
+.watermill-deck .intro-description { position: absolute; left: 120px; top: 612px; font-size: 46px; line-height: 1.3; color: var(--muted); }
 
-.watermill-deck .controls button:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+/* The longest excerpt occupies 14 × 36 × 1.2 = 604.8px of a 630px body.
+   The only extra annotation sits below, safely above the 990px content edge. */
+.watermill-deck .lesson-slide > h2 { white-space: nowrap; }
+.watermill-deck .lesson-body { position: absolute; left: 120px; top: 260px; width: 1680px; height: 630px; display: flex; flex-direction: column; justify-content: center; }
+.watermill-deck .lesson-source {
+  margin: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--paper);
+  font: 36px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0;
+  white-space: pre;
+  overflow: visible;
+  tab-size: 2;
+  text-align: left;
+}
+.watermill-deck .lesson-source code { display: block; font: inherit; white-space: inherit; overflow: visible; }
+.watermill-deck .lesson-code-line, .watermill-deck .transport-diff-line { display: inline; }
+.watermill-deck .lesson-code-line.is-emphasized { color: var(--accent); }
+.watermill-deck .lesson-code-line.is-comment { color: var(--muted); }
+.watermill-deck .lesson-annotation { position: absolute; left: 120px; top: 932px; width: 1680px; font-size: 42px; line-height: 1.2; }
+.watermill-deck .lesson-annotation .setup-note { color: var(--muted); font-size: 30px; line-height: 1.2; }
+.watermill-deck .router-lesson .lesson-body { justify-content: flex-start; gap: 74px; }
+.watermill-deck .router-outcomes { display: flex; flex-direction: column; gap: 22px; font-size: 44px; line-height: 1.2; }
+.watermill-deck .router-outcomes span { color: var(--accent); }
+.watermill-deck .transport-diff-line.is-removed { color: var(--coral); }
+.watermill-deck .transport-diff-line.is-added { color: var(--accent); }
+.watermill-deck .transport-diff-line.is-context { color: var(--paper); }
+.watermill-deck .closing-slide h2 { position: absolute; top: 210px; left: 120px; font-size: 152px; line-height: 1.07; letter-spacing: -.055em; }
+.watermill-deck .closing-slide > a { position: absolute; right: 120px; bottom: 105px; font-size: 46px; line-height: 1.2; }
+
+@media (prefers-reduced-motion: reduce) {
+  .watermill-deck .slides > section { transition: none !important; }
+}

@@ -12,6 +12,7 @@ import (
 func New() *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "Boston Golang API",
+		BodyLimit:    4096,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -33,5 +34,6 @@ func New() *fiber.App {
 	app.Get("/api/message", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{"message": "Hello from Go + Fiber!", "topic": "A talk on Watermill"})
 	})
+	newReportHub().routes(app)
 	return app
 }

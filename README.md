@@ -1,115 +1,124 @@
 # Boston Golang · October 26, 2026
 
-A talk on Watermill. This monorepo contains a three-slide React presentation and a Go/Fiber JSON API. The presentation introduces the library; Watermill itself is not wired into the API yet.
+A fourteen-slide Watermill talk by Matt Spurlin, Senior Software Engineer at Datadog. React + the official reveal.js React integration renders the slides; Go/Fiber runs real background report workers.
 
-## Requirements
+## Run the talk
 
-- Node.js 24.15+ within the 24 LTS line recommended (`.nvmrc`), or Node 26+. The test dependencies require this newer baseline.
-- npm 10+.
-- Go 1.26+ (required by Fiber v3). Tests use Go's race detector, so a C compiler is required on supported platforms.
+Requirements: Node.js 24.15+ (24.x recommended) or 26+, npm 10+, Go 1.26+. Go race tests also require a C compiler. The first three live demos need no database. The optional persistence chapter requires PostgreSQL 17, either your dedicated local database or the Compose service below. The build script only builds; the run script starts the local PostgreSQL container and waits for it before launching either application. Docker with Compose v2 is required for that default full-stack path.
 
-## Start developing
+```sh
+./scripts/build.sh
+./scripts/run.sh
+```
+
+Before the first run, configure the local password as described below. Open http://127.0.0.1:5173. Both applications must be running for the four live slides; the persistence slide also needs REPORT_POSTGRES_DSN. The first three introduction slides work offline. Arrow keys/swipe navigate, Escape toggles overview, S opens speaker notes. Ctrl-C stops both servers. Run from any working directory; scripts locate the repository themselves.
+
+Development:
 
 ```sh
 npm ci
-# Optional: cp .env.example .env
 npm run dev
 ```
 
-Open http://127.0.0.1:5173 for the presentation. The deck is self-contained and does not need the API; `npm run dev:web` is sufficient for presenting. The original JSON API remains at http://127.0.0.1:3000, with Vite proxying `/api/*` during development. No CORS configuration is needed for this same-origin development flow.
+React hot-reloads. Restart after Go changes. Optional root `.env` (see `.env.example`) controls `API_ADDR` and `API_PROXY_TARGET`; change both together for a different API port. Shell environment variables take precedence. Vite development and preview proxy `/api` to the Go server; both servers bind to loopback by default. These are local presentation tools, not a production deployment.
 
-React changes hot-reload. The API is compiled on startup; restart `npm run dev` after Go changes. Ctrl-C stops both servers. Either server failing also stops the other. Both bind to loopback by default.
+## PostgreSQL transport and full-stack startup
 
-To run them separately:
+GoChannel is this talk's simple in-memory starting choice, not a universal Watermill default. Before running the full stack:
+
+1. Copy `.env.example` to the untracked `.env` and set `REPORT_POSTGRES_PASSWORD` to a local password of your choice.
+2. For default local Compose mode, the run script derives a URI-safe DSN in memory from that password. It does not write credentials. Never use a production database or commit credentials.
+3. Build and run. The run script starts the official PostgreSQL service and waits for its health check:
 
 ```sh
-npm run dev:api
-npm run dev:web
+./scripts/build.sh
+./scripts/run.sh
 ```
 
-The optional root `.env` controls `API_ADDR` and `API_PROXY_TARGET`. Change both together when moving the API port. Shell environment variables take precedence. `API_PROXY_TARGET` is server-side configuration, not a browser secret. Never put secrets in `VITE_*` variables.
+The Compose service uses PostgreSQL 17, binds only to loopback, and keeps its database in a named volume. An existing dedicated PostgreSQL 17 instance is also fine: set REPORT_POSTGRES_DSN and run `./scripts/run.sh --external-postgres` to skip Compose explicitly. For in-memory lessons only, `./scripts/run.sh --memory-only` deliberately disables database setup. The demo user needs permission to create and drop its own message/offset tables. The other slides remain runnable without this configuration; the persistence slide shows an actionable error and pauses automatic replay rather than faking success.
 
-## Commands
+Default startup requires Docker Compose v2 with `up --wait` support. It fails before launching either app if Docker, configuration, or database health is unavailable. `REPORT_POSTGRES_WAIT_SECONDS` controls the readiness deadline (default 60 seconds). `npm run dev` does not manage containers; start the database explicitly for hot-reload development.
 
-Run from the repository root:
+The run script leaves the database container running when the presentation stops. Stop it without deleting data:
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the API and Vite together |
-| `npm run build` | Type-check and bundle React, compile Go |
-| `npm test` | Frontend tests and Go tests with race detector |
-| `npm run lint` | Oxlint, TypeScript, gofmt check, and go vet |
-| `npm run check` | Lint, tests, and production builds |
-| `npm run build:web` / `npm run build:api` | Build one application |
-| `npm run test:web` / `npm run test:api` | Test one application |
+```sh
+docker compose -f compose.postgres.yaml stop
+```
 
-Go-only commands work from `apps/api`, for example `go test -race ./...`. Format Go with `gofmt -w apps/api` from the root. The npm workspace lockfile and Go module sums are committed for reproducible dependency installation.
+Do not use `down -v` unless you intentionally want to erase the local database volume. The Compose health check verifies PostgreSQL readiness, not the application password. A password change in `.env` does not change credentials already initialized in a retained volume; use the original credentials or manage that local database explicitly.
 
-## Layout
+## The story: generate a report
+
+The title, speaker bio, and roadmap follow Watermill's **Publish → Handle → Middleware** journey. Each live demonstration has its own preceding explanatory slide, and a code-focused subscriber bridge separates delivery from application work:
+
+1. **Publish: make a request available.** A live GoChannel subscriber is established first. Publish places one request in its buffered channel. The backend verifies availability without reading, invoking a handler, acknowledging, or generating a CSV. The terminal status is Published, not Ready. This demonstrates live in-memory delivery, not retention for an offline consumer.
+2. **Subscriber bridge: receive, then decide.** Actual Subscribe/context/channel code shows how an application receives a message, invokes its work function, then calls Ack or Nack. Subscriber means the transport adapter, not the application handler. This explanatory bridge has no redundant end-to-end live demo.
+3. **Handle: application code does the work.** The explanatory slide introduces Router wiring. The live Router demo delivers to the report handler and generates the synthetic CSV. The Router interprets nil/error and manages acknowledgement; the handler does not manually Ack.
+4. **Middleware: wrap the same handler.** The explanation introduces wrappers before a focused Retry demo. Actual Watermill Retry fails twice and succeeds on call three with the same message. These are handler attempts within one delivery, not new publications or broker redeliveries.
+5. **Advanced extension: choose durable transport.** After an explicit persistence explanation, the PostgreSQL demo swaps the Publisher and Subscriber adapters, publishes with no subscriber, closes the connections, opens new connections to the same database, then starts delivery. The application handler is unchanged. The focused diagram shows the storage boundary and consumer lifecycle, not another whole application pipeline.
+
+“Worker” means an application process running subscriber/Router/handler code, not a separate Watermill primitive or a synonym for Subscriber. The main teaching diagrams name the concrete roles instead.
+
+Every demo starts automatically when its slide becomes active and repeats while that slide stays active. Each diagram focuses only on its chapter: publication, handling, a middleware wrapper, or durable storage. One identifiable message changes state based on observed server events. Retry stays at the same handler; the PostgreSQL scene keeps the message in the database before its Subscriber and Router start. An acknowledgement is shown only when the API reports the explicit Ack call. The projected stage contains only the focused diagram, observed state, and short labels. Code lives on separate explanation slides; full IDs remain available to assistive technology, and the Handle result uses the actual CSV. Detailed guarantees and source links are in speaker notes, not dashboard panels. Motion illustrates observed snapshots rather than measured transit time. Reduced-motion preferences preserve the same states without travel, spin or pulse animations. After Published or Ready, the finished result stays visible during a four-second countdown. The next cycle starts only after successful backend cleanup. A shared client-side start gate serializes canceled requests and late responses across navigation, overview and React remounts. Leaving the slide, opening overview, or unmounting stops polling/countdowns and cancels work. API or cleanup errors stop automatic cycling rather than creating a retry storm; server expiry remains a fallback for disconnected browsers. If creation has an unknown outcome and no usable run ID, the deck blocks further starts and asks you to wait 90 seconds before reloading. If an ID is known but cleanup fails, Try again retries cleanup before allowing a new run.
+
+### What the durability demo proves (and does not)
+
+It proves PostgreSQL-backed Watermill messages remain available after closing and reopening client database connections, then are consumed by a newly started Subscriber and Router. It does **not** kill/restart the operating-system process, demonstrate recovery from a machine crash, or preserve the UI status registry across API restart. The queued message lives in PostgreSQL via the official Watermill SQL adapter, not in a custom imitation queue. The PostgreSQL server stays running throughout.
+
+The first three live demos use GoChannel: in-process memory, no crash durability. The final run uses unique, generated message and offset table names in the configured dedicated database. Cleanup drops only those run-owned tables after the Subscriber/Router and connections have closed; it never drops a database. Database outages or an API crash can leave those isolated tables behind. Cleanup failures stop replay; DELETE can retry cleanup for a retained run, but the 16-run limit bounds only in-memory bookkeeping, not database garbage collection. Cleanup-failed runs retain a slot beyond the normal 90-second expiry until retried successfully or the API restarts. Use a dedicated demo database and inspect residual `watermill_messages_<run-id>` / `watermill_offsets_<run-id>` tables before removing them manually. This is intentionally a finite teaching lifecycle, not a persistent production report service.
+
+The handling, middleware and durable demos generate deterministic synthetic rows; publishing alone does not generate a report. Replacing a run's CSV avoids accumulating a second artifact during retries, but is **not** a transactional idempotency mechanism or an exactly-once guarantee. Production side effects need durable idempotency keys, transaction/outbox design where appropriate, and explicit transport delivery semantics.
+
+## Implementation map
+
+- `apps/web/src/App.tsx`: fourteen-slide deck, notes, source excerpts.
+- `apps/web/src/`: report UI, polling and reveal lifecycle tests.
+- `apps/api/internal/server/reports.go`: Watermill publication, Router, Retry, PostgreSQL lifecycle, cancellation and routes. The snippets on slides are extracted from this actual source using `demo:*` markers.
+- `apps/api/internal/server/reports_test.go`: real API/worker integration tests, retries, lifecycle and persistent queue behavior.
+- `scripts/build.sh`, `scripts/run.sh`, `scripts/run.mjs`: build, PostgreSQL readiness, and local preview.
+- `scripts/run.test.mjs`: mocked Docker/app startup, failure, timeout, and shutdown tests.
+- `scripts/api.mjs`: cross-platform Go commands.
+
+The previous chat/SSE presentation remains in git history at `e911138`; it is no longer part of this teaching sequence or the running API.
+
+## API and resource bounds
 
 ```text
-apps/
-  api/
-    cmd/server/          # Entrypoint, environment, graceful shutdown
-    internal/server/     # Fiber application, routes, HTTP tests
-    go.mod / go.sum
-  web/
-    src/                 # React slides, theme, typed API client, tests
-    vite.config.ts       # Local /api proxy
-scripts/api.mjs          # Cross-platform Go build/test/lint/dev commands
-.env.example
-package.json / package-lock.json
+POST   /api/reports/runs       {"mode":"publish"|"subscribe"|"router"|"retry"|"durable"}
+GET    /api/reports/runs/:id
+DELETE /api/reports/runs/:id
+GET    /api/health
+GET    /api/message
 ```
 
-## API
+POST returns 202 with a run ID, Watermill message ID, status, attempt count and real event timeline. GET returns the current snapshot, terminal Published for publish-only, and CSV when report-generating modes are Ready. The retained subscribe API mode supports the explanatory code and regression tests but is not a separate live slide. DELETE is idempotent, cancels pending work, and waits for its run resources to close. Failed PostgreSQL cleanup returns 503 and can be retried for that retained run; deleted/expired reads return 404. Invalid modes or malformed JSON return 400. At most 16 retained runs exist concurrently (503 when full). Each run is limited to 20 seconds; normally completed snapshots expire after 90 seconds; failed database cleanup retains its bounded slot for retry. This includes abandoned requests whose browsers never received a run ID. Each run has its own transport and subscriber. API shutdown cancels active work.
 
-- `GET /api/health` → `{"status":"ok","service":"boston-golang-api"}`. Liveness only; no dependencies are checked.
-- `GET /api/message` → `{"message":"Hello from Go + Fiber!","topic":"A talk on Watermill"}`.
-- Unknown routes return a JSON error with HTTP 404.
+Only expose this unauthenticated demo on your own machine. Do not bind it publicly without authentication, rate limiting and an explicit operational design. Health is liveness only, not a PostgreSQL dependency probe.
 
-Smoke-test the running development stack:
+## Verify before presenting
 
 ```sh
-curl --fail http://127.0.0.1:3000/api/health
-curl --fail http://127.0.0.1:5173/api/message
+npm run check          # lint/type checks, script/web/API tests (Go race), builds
+npm run test:web
+npm run test:api
 ```
 
-## Production outputs
+From `apps/api`, `go test -race ./...` runs backend checks. Real PostgreSQL integration tests require `TEST_REPORT_POSTGRES_DSN` pointing to a dedicated demo/test database; they explicitly skip when it is absent. For example, export that variable in your shell and run the same command. Use `go test -race -v ./...` to see individual integration skips; a default `npm run check` without this variable is not proof that database integration ran. Use `gofmt -w apps/api` after Go edits. Dependency versions are pinned in npm's lockfile and Go module sums.
 
-`npm run build` creates `apps/web/dist/` and `bin/api` (`bin/api.exe` on Windows). Run the API with `API_ADDR=127.0.0.1:3000 ./bin/api`. Serve `apps/web/dist/` with a static web server and route `/api/*` to the Go process on the same origin. Vite's development proxy is not part of the production bundle, and `vite preview` is not a production server. Configure an appropriate bind address, TLS/reverse proxy, and process supervisor for the deployment environment.
+Manual rehearsal: visit all four live slides, verify the stable message identity through accessible descriptions or API snapshots, publication-only Published state without CSV, three handler attempts, stored/not-started PostgreSQL stage, and the Handle demo’s Ready CSV. Leave during Processing, return, toggle overview, observe multiple countdown/replay cycles, and stop the API to verify the visible error state. The flow should never invent successful progress if the API fails.
 
-No database, auth system, container platform, or deployment provider is assumed.
+## Official references
 
-## Upstream references
+- [Watermill getting started](https://watermill.io/learn/getting-started/)
+- [Publisher and Subscriber](https://watermill.io/docs/pub-sub/)
+- [Router](https://watermill.io/docs/messages-router/)
+- [Middleware](https://watermill.io/docs/middlewares/)
+- [GoChannel](https://watermill.io/pubsubs/gochannel/)
+- [SQL / PostgreSQL documentation](https://watermill.io/pubsubs/sql/)
+- [Official SQL adapter source](https://github.com/ThreeDotsLabs/watermill-sql)
 
-- [React](https://react.dev/)
-- [Vite guide](https://vite.dev/guide/)
-- [Fiber v3 documentation](https://docs.gofiber.io/)
-- [Go downloads](https://go.dev/dl/)
+The official Watermill SQL adapter and PostgreSQL driver versions are pinned in `go.mod`/`go.sum`. Publisher shutdown and database connection shutdown are separate operations; the demo closes both before reconnecting.
 
-## Presenting
+### Projected-stage design
 
-The three opening slides are:
-
-1. **Watermill**: message-driven applications, the Go way.
-2. **Who I am**: Matt Spurlin, Senior Software Engineer at Datadog, [mattsp1290](https://github.com/mattsp1290).
-3. **What is Watermill?**: publishing/subscribing, routing to handlers, middleware, and transport choices.
-
-Use the arrow keys, Space, on-screen arrows, or horizontal touch swipes to navigate. The progress bar and slide counter show your place. URLs include stable slide hashes (`#/title`, `#/speaker`, `#/watermill`) so slides can be linked directly. Press **S** for the native speaker view with per-slide notes, **Esc** for the overview, and **F** for fullscreen. A browser popup permission may be needed for speaker view. On narrow screens, content reflows and longer slides can scroll vertically. Reduced-motion preferences disable slide transitions.
-
-Edit slide content and speaker notes in `apps/web/src/App.tsx`; the presentation theme is `apps/web/src/App.css`. The speaker details were supplied by the presenter. This is not a statement of Datadog endorsement. This is a web presentation, not a generated PowerPoint `.pptx` file.
-
-### Library choice and sources
-
-We use the official **@revealjs/react 0.2.2** wrapper with **reveal.js 6.0.2**, pinned exactly in the web package and lockfile. It supports the existing React 19 app, React-authored slides, lifecycle cleanup, keyboard/touch navigation, progress, speaker notes, and presenter view without building those features ourselves. The wrapper is a newer 0.x package, so versions are pinned and real deck initialization/navigation/StrictMode cleanup are tested. Spectacle was considered, but its then-current react-spring dependency advertised React peer ranges that did not include this app's React 19 version.
-
-Official references checked for this implementation:
-
-- [React integration and lifecycle](https://revealjs.com/react/)
-- [Reveal speaker view](https://revealjs.com/speaker-view/)
-- [Reveal configuration](https://revealjs.com/config/)
-- [Watermill introduction](https://watermill.io/learn/getting-started/)
-- [Publisher/subscriber semantics](https://watermill.io/docs/pub-sub/)
-- [Watermill router](https://watermill.io/docs/messages-router/)
-
-Watermill offers common interfaces across transports, not identical delivery guarantees. Speaker notes call out redelivery and idempotent handlers; the deck does not promise exactly-once processing.
+The deck uses a fixed 1920 × 1080 canvas, uniformly scaled by Reveal for 16:9 displays and letterboxed on 4:3 screens. It does not reflow into stacked website cards. Titles use 86 px design type and code uses 36 px, equivalent to approximately 57 px and 24 px at 1280 × 720. The approved slide-by-slide plan is in `docs/presentation-redesign-plan.md`.

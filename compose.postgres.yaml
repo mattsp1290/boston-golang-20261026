@@ -1,0 +1,20 @@
+# Local transport for the persistence chapter; run.sh starts this by default.
+# Set REPORT_POSTGRES_PASSWORD in your untracked .env before starting it.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: watermill_demo
+      POSTGRES_USER: watermill_demo
+      POSTGRES_PASSWORD: ${REPORT_POSTGRES_PASSWORD:?Set REPORT_POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:54329:5432"
+    volumes:
+      - report-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U watermill_demo -d watermill_demo"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+volumes:
+  report-postgres:
