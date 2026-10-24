@@ -23,8 +23,8 @@
 .watermill-deck .flow-publish-boundary, .watermill-deck .flow-channel, .watermill-deck .flow-handler, .watermill-deck .flow-result-paper, .watermill-deck .flow-database { fill: none; stroke: #708675; stroke-width: 3; stroke-linecap: square; }
 .watermill-deck .is-active .flow-channel, .watermill-deck .is-complete .flow-channel, .watermill-deck .is-complete .flow-result-paper, .watermill-deck .is-retained .flow-database, .watermill-deck .is-working .flow-handler, .watermill-deck .execution-complete .flow-handler { stroke: var(--accent); }
 .watermill-deck .execution-retrying .flow-handler, .watermill-deck .execution-error .flow-handler { stroke: #ffb4a2; }
-.watermill-deck .flow-message { transition: transform 250ms ease-out; }
-.watermill-deck .flow-message-paper { fill: var(--accent); stroke: var(--accent); stroke-width: 3; }
+.watermill-deck .flow-message { transition: transform 650ms cubic-bezier(.22, 1, .36, 1); }
+.watermill-deck .flow-message-paper { fill: #f7d27c; stroke: #ffe5a8; stroke-width: 3; }
 .watermill-deck .flow-message-fold { fill: none; stroke: #18201a; stroke-width: 3; stroke-linejoin: round; }
 .watermill-deck .flow-message.is-paused .flow-message-paper { fill: #ffb4a2; stroke: #ffb4a2; }
 .watermill-deck .flow-result-check { fill: var(--accent); font-size: 70px; text-anchor: middle; }
@@ -33,7 +33,7 @@
 .watermill-deck .flow-retry.has-errors > path { stroke: #c98e7f; }
 .watermill-deck .flow-retry.is-retrying > path { stroke: #ffb4a2; stroke-dasharray: none; stroke-width: 4; }
 .watermill-deck .flow-attempts text { fill: #7c8c80; text-anchor: middle; }
-.watermill-deck .flow-attempts .flow-call-mark { font-size: 112px; font-weight: 400; }
+.watermill-deck .flow-attempts .flow-call-mark { font-size: 64px; font-weight: 400; }
 .watermill-deck .flow-attempts .flow-call-label { font-size: 36px; }
 .watermill-deck .flow-attempts .attempt-error text, .watermill-deck .flow-attempts .attempt-stopped text { fill: #ffb4a2; }
 .watermill-deck .flow-attempts .attempt-success text, .watermill-deck .flow-attempts .attempt-running text { fill: var(--accent); }
@@ -52,6 +52,39 @@
 .watermill-deck .report-replay { display: inline-block; line-height: 1.2; margin-top: 55px; padding: 15px 24px; border: 2px solid #ffb4a2; border-radius: 0; color: #ffb4a2; background: none; font: inherit; font-size: 36px; cursor: pointer; }
 .watermill-deck .report-replay:focus-visible { outline: 3px solid var(--accent); outline-offset: 8px; }
 .watermill-deck .report-replay:hover { color: #f4f2e9; border-color: #f4f2e9; }
+
+.watermill-deck .flow-equipment, .watermill-deck .flow-handler { fill: #1d2c23; stroke: #718675; stroke-width: 3; }
+.watermill-deck .flow-channel { fill: #203227; stroke-width: 4; stroke-linejoin: round; }
+.watermill-deck .flow-boundary { fill: #18251d; }
+.watermill-deck .flow-database { fill: #203227; stroke-width: 4; }
+.watermill-deck .flow-message-label { fill: #f7d27c; font: 36px ui-monospace, monospace; text-anchor: middle; }
+.watermill-deck .flow-message-paper { animation: message-arrive 550ms ease-out both; }
+.watermill-deck .flow-link { stroke-width: 5; }
+.watermill-deck .flow-equipment, .watermill-deck .flow-handler, .watermill-deck .flow-channel, .watermill-deck .flow-database { transition: fill 300ms ease, stroke 300ms ease; }
+.watermill-deck .is-working .flow-handler { fill: #283f2c; }
+.watermill-deck .execution-complete .flow-handler { fill: #28412b; }
+.watermill-deck .execution-offline .flow-equipment { stroke-dasharray: 12 10; }
+.watermill-deck .flow-work-ring { fill: none; stroke: var(--accent); stroke-width: 5; stroke-dasharray: 90 35; transform-box: fill-box; transform-origin: center; animation: working-turn 2s linear infinite; opacity: .75; }
+.watermill-deck .flow-retry.is-retrying > path { stroke-width: 6; stroke-dasharray: 25 16; animation: retry-flow 900ms linear infinite; }
+.watermill-deck .flow-call-badge { fill: #1d2c23; stroke: #536259; stroke-width: 2; }
+.watermill-deck .attempt-running .flow-call-badge { fill: #283f2c; stroke: var(--accent); }
+.watermill-deck .attempt-error .flow-call-badge, .watermill-deck .attempt-stopped .flow-call-badge { fill: #382a24; stroke: #ffb4a2; }
+.watermill-deck .attempt-success .flow-call-badge { fill: #28412b; stroke: var(--accent); }
+.watermill-deck .flow-call-outcome { font-size: 36px; }
+.watermill-deck .flow-connection-gap { stroke: #ffb4a2; stroke-width: 7; }
+.watermill-deck .flow-result-check, .watermill-deck .report-artifact { animation: result-arrive 450ms ease-out both; }
+.watermill-deck .flow-beats { display: flex; gap: 60px; list-style: none; padding: 10px 0 0; margin: 0; font-size: 36px; color: #829589; }
+.watermill-deck .report-flow[data-mode="durable"] .flow-beats { justify-content: flex-end; }
+.watermill-deck .flow-beats li { display: flex; align-items: center; gap: 18px; }
+.watermill-deck .flow-beats span { display: grid; place-items: center; flex-shrink: 0; width: 50px; height: 50px; border: 2px solid #536259; border-radius: 50%; }
+.watermill-deck .flow-beats .is-done { color: #bdd0bf; }
+.watermill-deck .flow-beats .is-current { color: var(--accent); }
+.watermill-deck .flow-beats .is-current span { border-color: var(--accent); background: #28412b; }
+.watermill-deck .report-flow.is-stopped * { animation: none !important; transition: none !important; }
+@keyframes working-turn { to { transform: rotate(360deg); } }
+@keyframes retry-flow { to { stroke-dashoffset: -82; } }
+@keyframes message-arrive { from { opacity: 0; } to { opacity: 1; } }
+@keyframes result-arrive { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
   .watermill-deck .flow-message { transition: none; }
   .watermill-deck .report-flow * { animation: none !important; transition: none !important; }
